@@ -1,0 +1,63 @@
+.sidebar {
+  width: 250px;
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  display: flex;
+  flex-direction: column;
+}
+
+.logo {
+  padding: 1.5rem;
+  font-size: 1.25rem;
+  font-weight: bold;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  color: white;
+}
+
+.subtitle {
+  font-size: 0.7rem;
+  font-weight: normal;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+
+.nav {
+  flex: 1;
+  padding: 1rem 0;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1.5rem;
+  color: var(--sidebar-text);
+  transition: all 0.2s;
+  gap: 0.75rem;
+}
+
+.navItem:hover {
+  background-color: rgba(255,255,255,0.05);
+  color: var(--sidebar-text-hover);
+}
+
+.navItemActive {
+  background-color: var(--sidebar-active);
+  color: white;
+  border-left: 3px solid var(--primary);
+}
+
+.datasetInfo {
+  padding: 1rem;
+  background-color: rgba(0,0,0,0.2);
+  margin: 1rem;
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+}
+
+.datasetInfo p {
+  margin-bottom: 0.5rem;
+}
+
+.datasetInfo strong {
+  color: white;
+}

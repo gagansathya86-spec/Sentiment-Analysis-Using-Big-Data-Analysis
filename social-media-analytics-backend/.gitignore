@@ -1,0 +1,12 @@
+.env
+*.env
+!.env.example
+venv/
+__pycache__/
+*.py[cod]
+data/uploads/*
+!data/uploads/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+data/trained_models/*
+!data/trained_models/.gitkeep

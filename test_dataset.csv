@@ -1,0 +1,13 @@
+text,timestamp,user,likes,comments,shares,sentiment
+"I love the new design, it's absolutely fantastic!",2026-08-30T10:00:00Z,user1,10,2,5,positive
+"This app is terrible and keeps crashing.",2026-08-30T11:00:00Z,user2,0,0,0,negative
+"Just a normal day today.",2026-08-30T12:00:00Z,user3,1,0,0,neutral
+"Amazing features and great performance.",2026-08-30T13:00:00Z,user4,20,5,10,positive
+"I am very disappointed with the latest update.",2026-08-30T14:00:00Z,user5,2,1,0,negative
+"Can't complain, it works as expected.",2026-08-30T15:00:00Z,user6,5,1,1,neutral
+"Best experience ever!",2026-08-30T16:00:00Z,user7,50,10,20,positive
+"Worst customer service I have ever experienced.",2026-08-30T17:00:00Z,user8,0,0,0,negative
+"It's okay, nothing special.",2026-08-30T18:00:00Z,user9,3,0,0,neutral
+"Highly recommend this to everyone.",2026-08-30T19:00:00Z,user10,100,20,50,positive
+"Will not be using this again.",2026-08-30T20:00:00Z,user11,1,0,0,negative
+"Neutral comment here.",2026-08-30T21:00:00Z,user12,0,0,0,neutral
