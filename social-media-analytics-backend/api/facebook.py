@@ -4,7 +4,7 @@ import urllib.request
 import urllib.error
 import json
 import pandas as pd
-from services import model_service, dataset_service
+from services import model_service, dataset_service, social_service
 from utils import file_utils
 import re
 
@@ -42,21 +42,72 @@ def get_best_model_dataset_id():
             best_id = d_id
     return best_id
 
-@router.get("/posts")
-def get_facebook_posts():
-    token = settings.FACEBOOK_ACCESS_TOKEN
+
+@router.get("/status")
+def get_facebook_status():
+    token = settings.FACEBOOK_ACCESS_TOKEN or settings.META_ACCESS_TOKEN
+    sync_info = social_service.get_sync_statuses().get("facebook", {})
     if not token:
+        return {
+            "connected": False,
+            "configured": False,
+            "status": "unconfigured",
+            "message": "Facebook access token is not configured in .env",
+            "last_sync": sync_info.get("last_sync")
+        }
+    
+    # Test with Meta Graph API
+    page_id = getattr(settings, "FACEBOOK_PAGE_ID", "me")
+    url = f"https://graph.facebook.com/v21.0/{page_id}?fields=id,name&access_token={token}"
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    try:
+        with urllib.request.urlopen(req, timeout=10) as response:
+            page_data = json.loads(response.read().decode("utf-8"))
+            return {
+                "connected": True,
+                "configured": True,
+                "status": "active",
+                "page": page_data,
+                "last_sync": sync_info.get("last_sync"),
+                "message": f"Connected to Facebook Page '{page_data.get('name')}'"
+            }
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode("utf-8")
+        try:
+            err = json.loads(raw).get("error", {})
+            return {
+                "connected": False,
+                "configured": True,
+                "status": "token_expired" if err.get("code") == 190 else "error",
+                "error_code": err.get("code"),
+                "error_message": err.get("message", raw),
+                "last_sync": sync_info.get("last_sync")
+            }
+        except Exception:
+            return {"connected": False, "configured": True, "status": "error", "error_message": raw}
+    except Exception as e:
+        return {"connected": False, "configured": True, "status": "error", "error_message": str(e)}
+
+
+@router.get("/posts")
+def get_facebook_posts(use_stored_if_offline: bool = True):
+    token = settings.FACEBOOK_ACCESS_TOKEN or settings.META_ACCESS_TOKEN
+    if not token:
+        if use_stored_if_offline:
+            stored = social_service.get_social_posts(platform="facebook", limit=50)
+            if stored:
+                return [{"id": p["id"], "message": p["text"], "created_time": p["created_time"], "comments_count": p["comments_count"], "likes_count": p["likes_count"]} for p in stored]
         raise HTTPException(status_code=401, detail="Facebook access token is missing or not configured.")
     
     page_id = getattr(settings, "FACEBOOK_PAGE_ID", "me")
-    url = f"https://graph.facebook.com/v25.0/{page_id}/posts?fields=id,message,created_time,comments.summary(true),reactions.summary(true)&access_token={token}"
+    url = f"https://graph.facebook.com/v21.0/{page_id}/posts?fields=id,message,created_time,comments.summary(true),reactions.summary(true)&access_token={token}"
     
     all_posts = []
     
     try:
         while url:
             req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, timeout=12) as response:
                 data = json.loads(response.read().decode("utf-8"))
                 
                 for post in data.get("data", []):
@@ -78,6 +129,10 @@ def get_facebook_posts():
         
     except urllib.error.HTTPError as e:
         error_msg = e.read().decode("utf-8")
+        if use_stored_if_offline:
+            stored = social_service.get_social_posts(platform="facebook", limit=50)
+            if stored:
+                return [{"id": p["id"], "message": p["text"], "created_time": p["created_time"], "comments_count": p["comments_count"], "likes_count": p["likes_count"]} for p in stored]
         try:
             error_data = json.loads(error_msg)
             fb_error = error_data.get("error", {}).get("message", str(e))
@@ -85,9 +140,11 @@ def get_facebook_posts():
             fb_error = str(e)
             
         raise HTTPException(status_code=e.code, detail=f"Facebook API error: {fb_error}")
-    except urllib.error.URLError as e:
-        raise HTTPException(status_code=502, detail=f"Network error while connecting to Facebook: {str(e.reason)}")
     except Exception as e:
+        if use_stored_if_offline:
+            stored = social_service.get_social_posts(platform="facebook", limit=50)
+            if stored:
+                return [{"id": p["id"], "message": p["text"], "created_time": p["created_time"], "comments_count": p["comments_count"], "likes_count": p["likes_count"]} for p in stored]
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.post("/analyze")
@@ -138,6 +195,20 @@ def analyze_facebook_posts():
             if s_lower == "2" or "neutral" in s_lower:
                 sentiment = "neutral"
                 
+        post_record = {
+            "id": post["id"],
+            "platform": "facebook",
+            "account_name": "Facebook Page",
+            "author": "Facebook Page",
+            "text": post["message"],
+            "created_time": post["created_time"],
+            "comments_count": post.get("comments_count", 0),
+            "likes_count": post.get("likes_count", 0),
+            "shares_count": 0,
+            "sentiment": sentiment,
+            "sentiment_confidence": pred_info.get("confidence", 0.0),
+        }
+        social_service.upsert_post(post_record)
         analyzed_posts.append({
             "id": post["id"],
             "message": post["message"],
@@ -147,6 +218,8 @@ def analyze_facebook_posts():
             "sentiment": sentiment,
             "prediction": pred_info.get("confidence")
         })
+
+    social_service.update_sync_status("facebook", "analyzed", len(analyzed_posts))
 
     total_fetched = len(posts)
     posts_analyzed = len(valid_posts)
@@ -298,6 +371,17 @@ def analyze_facebook_post_comments(post_id: str):
         elif sentiment == "unknown":
             unknown_count += 1
                 
+        social_service.upsert_comment({
+            "id": comment["id"],
+            "post_id": post_id,
+            "platform": "facebook",
+            "author": comment["author"],
+            "text": comment["message"],
+            "created_time": comment["created_time"],
+            "likes_count": comment["like_count"],
+            "sentiment": sentiment,
+            "sentiment_confidence": confidence or 0.0
+        })
         analyzed_comments.append({
             "id": comment["id"],
             "message": comment["message"],

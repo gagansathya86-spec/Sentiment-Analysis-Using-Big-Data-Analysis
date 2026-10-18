@@ -29,6 +29,7 @@ except LookupError:
         "i", "you", "he", "she", "they", "we", "at", "by", "from", "or",
     }
 
+STOPWORDS = _STOPWORDS
 _STEMMER = None
 
 

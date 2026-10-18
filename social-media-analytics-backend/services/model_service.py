@@ -3,10 +3,10 @@ Model service — orchestrates training and prediction using SentimentModel,
 operating on the preprocessed dataset produced by dataset_service.
 """
 import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
 
-from config import settings
+from config import settings, BASE_DIR
 from models.ml_model import SentimentModel
 from services import dataset_service
 from utils import file_utils
@@ -69,11 +69,23 @@ def train_model(dataset_id: str, mapping_override: Optional[dict], test_split_si
     return result
 
 
-def _load_trained_model(dataset_id: str) -> SentimentModel:
+def _load_trained_model(dataset_id: str) -> Tuple[SentimentModel, dict]:
     model_entry = file_utils.get_model_entry(dataset_id)
     if model_entry is None:
         raise ValueError(f"No trained model found for dataset '{dataset_id}'. Call /api/sentiment/train first.")
-    return SentimentModel.load(model_entry["model_path"]), model_entry
+    
+    path = model_entry["model_path"]
+    if not os.path.isabs(path):
+        if not os.path.exists(path):
+            candidate = os.path.join(str(BASE_DIR), path)
+            if os.path.exists(candidate):
+                path = candidate
+            else:
+                candidate2 = os.path.join(settings.MODEL_DIR, os.path.basename(path))
+                if os.path.exists(candidate2):
+                    path = candidate2
+
+    return SentimentModel.load(path), model_entry
 
 
 def predict_texts(dataset_id: str, texts: List[str]) -> Dict[str, Any]:

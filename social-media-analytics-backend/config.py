@@ -50,9 +50,17 @@ class Settings(BaseSettings):
     # --- Uploads ---
     MAX_UPLOAD_SIZE_MB: int = Field(default=50)
 
-    # --- Integrations ---
+    # --- Integrations (Meta Graph API: Facebook & Instagram) ---
+    META_ACCESS_TOKEN: str = Field(default="")
+    META_API_VERSION: str = Field(default="v21.0")
     FACEBOOK_ACCESS_TOKEN: str = Field(default="")
     FACEBOOK_PAGE_ID: str = Field(default="me")
+    INSTAGRAM_ACCESS_TOKEN: str = Field(default="")
+    INSTAGRAM_ACCOUNT_ID: str = Field(default="")
+
+    # --- Alerts & Monitoring ---
+    ALERT_NEGATIVE_THRESHOLD: float = Field(default=35.0)  # % negative posts to trigger warning
+    ALERT_MIN_SAMPLE_SIZE: int = Field(default=3)          # minimum posts before raising spike alert
 
     class Config:
         env_file = ".env"
@@ -61,6 +69,15 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Token reconciliation: allow META_ACCESS_TOKEN or FACEBOOK_ACCESS_TOKEN interchangeably
+if not settings.FACEBOOK_ACCESS_TOKEN and settings.META_ACCESS_TOKEN:
+    settings.FACEBOOK_ACCESS_TOKEN = settings.META_ACCESS_TOKEN
+elif not settings.META_ACCESS_TOKEN and settings.FACEBOOK_ACCESS_TOKEN:
+    settings.META_ACCESS_TOKEN = settings.FACEBOOK_ACCESS_TOKEN
+
+if not settings.INSTAGRAM_ACCESS_TOKEN and settings.META_ACCESS_TOKEN:
+    settings.INSTAGRAM_ACCESS_TOKEN = settings.META_ACCESS_TOKEN
 
 # Ensure storage directories exist at startup.
 for _dir in (settings.UPLOAD_DIR, settings.PROCESSED_DIR, settings.MODEL_DIR):
