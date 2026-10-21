@@ -1,0 +1,687 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\gagan\\Downloads\\files\\social-media-analytics-backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [47000] using WatchFiles
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [45736]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'api\instagram.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [45736]
+WARNING:  WatchFiles detected changes in 'api\instagram.py'. Reloading...
+Process SpawnProcess-2:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\config.py", line 365, in configure_logging
+    logging.config.dictConfig(self.log_config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 811, in dictConfig
+    dictConfigClass(config).configure()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 501, in configure
+    incremental = config.pop('incremental', False)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 334, in pop
+    value = dict.pop(self, key, default)
+KeyboardInterrupt
+WARNING:  WatchFiles detected changes in 'test_instagram.py'. Reloading...
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [41856]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\runners.py", line 44, in run
+    return loop.run_until_complete(main)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 636, in run_until_complete
+    self.run_forever()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 603, in run_forever
+    self._run_once()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 1909, in _run_once
+    handle._run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\events.py", line 80, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\server.py", line 68, in serve
+    with self.capture_signals():
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 142, in __exit__
+    next(self.gen)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\server.py", line 328, in capture_signals
+    signal.raise_signal(captured_signal)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\starlette\routing.py", line 700, in lifespan
+    await receive()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\lifespan\on.py", line 137, in receive
+    return await self.receive_queue.get()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\queues.py", line 159, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+WARNING:  WatchFiles detected changes in 'test_instagram.py'. Reloading...
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [34308]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\runners.py", line 44, in run
+    return loop.run_until_complete(main)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 636, in run_until_complete
+    self.run_forever()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 603, in run_forever
+    self._run_once()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 1909, in _run_once
+    handle._run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\events.py", line 80, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\server.py", line 68, in serve
+    with self.capture_signals():
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 142, in __exit__
+    next(self.gen)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\server.py", line 328, in capture_signals
+    signal.raise_signal(captured_signal)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\starlette\routing.py", line 700, in lifespan
+    await receive()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\lifespan\on.py", line 137, in receive
+    return await self.receive_queue.get()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\queues.py", line 159, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [15320]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'api\instagram.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [15320]
+WARNING:  WatchFiles detected changes in 'services\social_service.py', 'test_instagram.py'. Reloading...
+Process SpawnProcess-6:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\os.py", line 1030, in fdopen
+    return io.open(fd, mode, buffering, encoding, *args, **kwargs)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\codecs.py", line 309, in __init__
+    def __init__(self, errors='strict'):
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [19172]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'services\meta_graph.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [19172]
+WARNING:  WatchFiles detected changes in 'api\settings_api.py', 'services\meta_graph.py', 'api\instagram.py', 'api\facebook.py'. Reloading...
+Process SpawnProcess-8:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\config.py", line 365, in configure_logging
+    logging.config.dictConfig(self.log_config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 811, in dictConfig
+    dictConfigClass(config).configure()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 501, in configure
+    incremental = config.pop('incremental', False)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 334, in pop
+    value = dict.pop(self, key, default)
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+WARNING:  WatchFiles detected changes in 'api\instagram.py'. Reloading...
+INFO:     Started server process [13364]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [13364]
+WARNING:  WatchFiles detected changes in 'api\settings_api.py', 'api\instagram.py', 'api\facebook.py'. Reloading...
+Process SpawnProcess-10:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\os.py", line 1030, in fdopen
+    return io.open(fd, mode, buffering, encoding, *args, **kwargs)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\codecs.py", line 309, in __init__
+    def __init__(self, errors='strict'):
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [4644]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_meta_graph.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [4644]
+WARNING:  WatchFiles detected changes in 'api\facebook.py', 'services\meta_graph.py', 'api\instagram.py'. Reloading...
+Process SpawnProcess-12:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\config.py", line 365, in configure_logging
+    logging.config.dictConfig(self.log_config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 811, in dictConfig
+    dictConfigClass(config).configure()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 538, in configure
+    _clearExistingHandlers()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 275, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\__init__.py", line 2182, in shutdown
+    h.flush()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\__init__.py", line 1084, in flush
+    self.stream.flush()
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [8092]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'api\facebook.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [8092]
+WARNING:  WatchFiles detected changes in 'services\meta_graph.py'. Reloading...
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [49772]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\runners.py", line 44, in run
+    return loop.run_until_complete(main)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 636, in run_until_complete
+    self.run_forever()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 603, in run_forever
+    self._run_once()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 1909, in _run_once
+    handle._run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\events.py", line 80, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\server.py", line 68, in serve
+    with self.capture_signals():
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\contextlib.py", line 142, in __exit__
+    next(self.gen)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\server.py", line 328, in capture_signals
+    signal.raise_signal(captured_signal)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\starlette\routing.py", line 700, in lifespan
+    await receive()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\lifespan\on.py", line 137, in receive
+    return await self.receive_queue.get()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\asyncio\queues.py", line 159, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+WARNING:  WatchFiles detected changes in 'test_meta_graph.py'. Reloading...
+Process SpawnProcess-15:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\config.py", line 365, in configure_logging
+    logging.config.dictConfig(self.log_config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 811, in dictConfig
+    dictConfigClass(config).configure()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 538, in configure
+    _clearExistingHandlers()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 275, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\__init__.py", line 2182, in shutdown
+    h.flush()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\__init__.py", line 1084, in flush
+    self.stream.flush()
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [23628]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'services\meta_graph.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [23628]
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [52484]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_meta_graph.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [52484]
+WARNING:  WatchFiles detected changes in 'api\facebook.py', 'services\meta_graph.py', 'test_meta_graph.py', 'api\settings_api.py', 'api\instagram.py'. Reloading...
+Process SpawnProcess-18:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\config.py", line 365, in configure_logging
+    logging.config.dictConfig(self.log_config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 811, in dictConfig
+    dictConfigClass(config).configure()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 538, in configure
+    _clearExistingHandlers()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 275, in _clearExistingHandlers
+    logging.shutdown(logging._handlerList[:])
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\__init__.py", line 2174, in shutdown
+    for wr in reversed(handlerList[:]):
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [42100]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_meta_routes.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [42100]
+WARNING:  WatchFiles detected changes in 'test_meta_routes.py'. Reloading...
+Process SpawnProcess-20:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\os.py", line 1030, in fdopen
+    return io.open(fd, mode, buffering, encoding, *args, **kwargs)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\codecs.py", line 309, in __init__
+    def __init__(self, errors='strict'):
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [12584]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_meta_routes.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [12584]
+WARNING:  WatchFiles detected changes in 'test_meta_routes.py'. Reloading...
+Process SpawnProcess-22:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\config.py", line 365, in configure_logging
+    logging.config.dictConfig(self.log_config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 811, in dictConfig
+    dictConfigClass(config).configure()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 544, in configure
+    formatters[name] = self.configure_formatter(
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 656, in configure_formatter
+    result = self.configure_custom(config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 469, in configure_custom
+    c = config.pop('()')
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 335, in pop
+    return self.convert_with_key(key, value, replace=False)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 293, in convert_with_key
+    result = self.configurator.convert(value)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 448, in convert
+    elif not isinstance(value, ConvertingList) and isinstance(value, list):
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [21080]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'api\facebook.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21080]
+WARNING:  WatchFiles detected changes in 'services\meta_graph.py', 'test_meta_graph.py'. Reloading...
+Process SpawnProcess-24:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\config.py", line 365, in configure_logging
+    logging.config.dictConfig(self.log_config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 811, in dictConfig
+    dictConfigClass(config).configure()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 544, in configure
+    formatters[name] = self.configure_formatter(
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 656, in configure_formatter
+    result = self.configure_custom(config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 475, in configure_custom
+    result = c(**kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\logging.py", line 42, in __init__
+    self.use_colors = sys.stdout.isatty()
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [19580]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'api\instagram.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [19580]
+WARNING:  WatchFiles detected changes in 'test_instagram.py', 'api\instagram.py'. Reloading...
+Process SpawnProcess-26:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\os.py", line 1030, in fdopen
+    return io.open(fd, mode, buffering, encoding, *args, **kwargs)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\codecs.py", line 309, in __init__
+    def __init__(self, errors='strict'):
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [18324]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'api\instagram.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [18324]
+WARNING:  WatchFiles detected changes in 'services\social_service.py', 'analytics\crisis_alerts.py', 'api\alerts.py', 'test_instagram.py', 'test_crisis_monitoring.py'. Reloading...
+Process SpawnProcess-28:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\config.py", line 365, in configure_logging
+    logging.config.dictConfig(self.log_config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 811, in dictConfig
+    dictConfigClass(config).configure()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 544, in configure
+    formatters[name] = self.configure_formatter(
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 656, in configure_formatter
+    result = self.configure_custom(config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 471, in configure_custom
+    c = self.resolve(c)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 386, in resolve
+    found = self.importer(used)
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [38192]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_crisis_monitoring.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [38192]
+WARNING:  WatchFiles detected changes in 'analytics\crisis_alerts.py', 'test_crisis_monitoring.py'. Reloading...
+Process SpawnProcess-30:
+Traceback (most recent call last):
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 314, in _bootstrap
+    self.run()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\multiprocessing\process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\_subprocess.py", line 76, in subprocess_started
+    config.configure_logging()
+  File "C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\uvicorn\config.py", line 365, in configure_logging
+    logging.config.dictConfig(self.log_config)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 811, in dictConfig
+    dictConfigClass(config).configure()
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 544, in configure
+    formatters[name] = self.configure_formatter(
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 654, in configure_formatter
+    factory = config['()'] # for use in exception handler
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 327, in __getitem__
+    return self.convert_with_key(key, value)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 293, in convert_with_key
+    result = self.configurator.convert(value)
+  File "C:\Users\gagan\AppData\Local\Programs\Python\Python310\lib\logging\config.py", line 456, in convert
+    m = self.CONVERT_PATTERN.match(value)
+KeyboardInterrupt
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in TrainResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictTextResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+C:\Users\gagan\Downloads\files\social-media-analytics-backend\venv\lib\site-packages\pydantic\_internal\_fields.py:132: UserWarning: Field "model_id" in PredictDatasetResponse has conflict with protected namespace "model_".
+
+You may be able to resolve this warning by setting `model_config['protected_namespaces'] = ()`.
+  warnings.warn(
+INFO:     Started server process [4640]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'test_crisis_monitoring.py'. Reloading...

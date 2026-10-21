@@ -1,5 +1,5 @@
 # Sentiment Analysis Using Big Data Analysis
-### Multi-Platform Social Intelligence & Crisis Monitoring Platform
+### Facebook Social Intelligence & Crisis Monitoring Platform
 **A College Major Project for Big Data Analytics and Natural Language Processing**
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI_0.111-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
@@ -12,7 +12,7 @@
 
 ## 1. Project Overview & Architecture
 
-This project upgrades an academic big data sentiment analysis application into a unified **Multi-Platform Social Analytics & Intelligence Platform** (**NexusIntel v2.0**). It bridges direct live social ingestion from **Facebook Pages** and **Instagram Professional** accounts via the **Meta Graph API (v21.0)** with distributed data pipelines, sentiment classification, clause-level Aspect-Based Sentiment Analysis (ABSA), viral post potential estimation, and real-time crisis alert surveillance.
+This project upgrades an academic big data sentiment analysis application into a **Facebook Social Analytics & Intelligence Platform** (**NexusIntel v2.0**). It combines live Facebook Page ingestion via the **Meta Graph API (v21.0)** with dataset pipelines, sentiment classification, clause-level Aspect-Based Sentiment Analysis (ABSA), viral post potential estimation, explainable recommendations, and crisis alert surveillance.
 
 ### System Architecture
 
@@ -20,11 +20,10 @@ This project upgrades an academic big data sentiment analysis application into a
                   ┌────────────────────────────────────────────────────────┐
                   │                 Meta Graph API (v21.0)                 │
                   │   ┌─────────────────────┐    ┌─────────────────────┐   │
-                  │   │ Facebook Page Graph │    │ Instagram Business  │   │
-                  │   │ (Posts & Comments)  │    │  (Media & Comments) │   │
-                  └───┴──────────┬──────────┴────┴──────────┬──────────┴───┘
-                                 │                          │
-                                 ▼                          ▼
+                  │     Facebook Page Graph API (Posts & Comments)     │
+                  └──────────────────────────┬─────────────────────────┘
+                                             │
+                                             ▼
                ┌───────────────────────────────────────────────────────────┐
                │           Unified Social Ingestion & Normalizer           │
                │   (Common schema: platform, post_id, text, metrics, time) │
@@ -89,7 +88,7 @@ This project upgrades an academic big data sentiment analysis application into a
 
 ---
 
-## 3. Meta Graph API Integration (Facebook & Instagram)
+## 3. Meta Graph API Integration (Facebook)
 
 ### Supported Authentication Flows
 The platform supports Meta Graph API v21.0:
@@ -97,11 +96,6 @@ The platform supports Meta Graph API v21.0:
    - Queries `/{page_id}/feed?fields=id,message,created_time,shares,reactions.summary(true),comments.summary(true)`.
    - Fetches post comments via `/{post_id}/comments`.
    - Runs text through the sentiment pipeline and normalizes engagement.
-2. **Instagram Integration (Professional Account via Facebook Page)**:
-   - Queries connected Facebook Pages: `/me/accounts?fields=id,name,access_token,instagram_business_account`.
-   - Resolves the linked Instagram Business/Creator Account ID.
-   - Fetches media via `/{ig_user_id}/media?fields=id,caption,media_type,permalink,timestamp,like_count,comments_count`.
-   - Fetches comment threads via `/{ig_media_id}/comments?fields=id,text,timestamp,username,like_count`.
 
 ### Required Meta Developer Permissions
 To connect live Meta accounts, your Meta Developer App requires:
@@ -110,18 +104,16 @@ To connect live Meta accounts, your Meta Developer App requires:
 | `pages_show_list` | Discover pages managed by the user |
 | `pages_read_engagement` | Retrieve Facebook post likes, shares, and engagement |
 | `pages_manage_posts` / `pages_read_user_content` | Retrieve post and comment text |
-| `instagram_basic` | Read Instagram Professional profile info and media list |
-| `instagram_manage_comments` | Retrieve media comments for NLP sentiment analysis |
 
 > [!IMPORTANT]
-> **Graceful Offline & Evaluation Fallback**: If a live Meta token is expired, short-lived, or lacks enterprise permissions, the application does not crash. It provides explicit diagnostic messages and automatically serves verified multi-platform demonstration records (`is_sample=1`), allowing examiners to evaluate every analytics tab, chart, and feature offline.
+> **Offline & Evaluation Fallback**: If a live Meta token is unavailable, the application provides diagnostic messages and can serve Facebook demonstration records (`is_sample=1`) for evaluating analytics offline.
 
 ---
 
 ## 4. Advanced Analytics Features
 
 ### A. Aspect-Based Sentiment Analysis (ABSA)
-Extracts fine-grained opinion polarity across 7 commercial dimensions:
+Extracts clause-level opinions across configured Facebook topics including:
 - `Product Quality`
 - `Price & Value`
 - `Customer Service`
@@ -129,36 +121,29 @@ Extracts fine-grained opinion polarity across 7 commercial dimensions:
 - `Usability & UI`
 - `Reliability & Bugs`
 - `General Feedback`
+- `Location`
 
-Uses clause-level segmentation (splitting sentences at contrastive conjunctions like *but, however, although, yet*) to isolate conflicting sentiments within single reviews (e.g., *"The phone screen is gorgeous but delivery was 2 weeks late"*).
+Uses explainable keyword matching and clause-local opinion cues. Negation is handled with a short local scope; mixed opinions remain separate (e.g., *"The camera is excellent, but the battery is terrible"*). Parent post sentiment is not copied to an aspect. This lightweight lexicon approach can miss sarcasm and implicit topics.
 
 ### B. Engagement Analytics
-Calculates cross-platform interaction dynamics using the standardized social formula:
+Calculates Facebook interaction dynamics using the standardized social formula:
 $$\text{Engagement Score} = \text{Likes} + (2 \times \text{Comments}) + (3 \times \text{Shares})$$
 - Explores engagement vs. sentiment correlation.
 - Computes optimal posting hours and peak engagement days.
 - Separates descriptive statistics from predictive modeling.
 
 ### C. Viral Post Potential Estimation
-A transparent, heuristic multi-factor scoring model ($0 - 100$) evaluating:
-1. **Early Velocity Factor** (Comment-to-Like acceleration ratio, max 30 pts)
-2. **Viral Sentiment Magnetism** (Strong polarities outdrive neutral text, max 20 pts)
-3. **Copywriting Format & Length** (Optimal text length 100-350 chars, max 15 pts)
-4. **Hashtag Virality Ratio** (2-4 targeted hashtags, max 15 pts)
-5. **Historical Engagement Performance** (Comparison against platform averages, max 20 pts)
+A transparent, experimental heuristic score ($0 - 100$) evaluating available engagement volume, comment-to-reaction ratio, sentiment confidence, historical Facebook posting-hour performance, and share activity or topic tags. It is not a trained or calibrated probability. The database has no engagement snapshots, so engagement growth is not measured. Missing metrics are surfaced as unavailable.
 
 Includes an interactive **Viral Simulator** where marketing drafts can be tested before posting.
 
 ### D. Negative Sentiment Spikes & Crisis Alerts
-Real-time surveillance monitoring against negative sentiment thresholds:
-- Triggers when negative sentiment ratio exceeds configured baseline (default: 40%).
-- Isolates affected platform, time window, and driver keywords.
-- Workflow management: Mark alerts as **Active**, **Under Review**, or **Resolved**.
+Compares consecutive timestamped windows ending at the latest stored Facebook item (default: 7 days each). A potential-issue alert requires the minimum sample size in both windows (default: 3) and a negative-sentiment rise at or above the configured threshold (default: 35 percentage points). Evidence includes both period ratios, terms, detected aspects, and example comments/posts. Alerts indicate a potential issue, not a confirmed crisis; absent/insufficient history does not trigger an alert.
 
 ### E. Trend & Keyword Discovery
 - N-gram term extraction with stopword removal.
-- Distinctive term mining comparing Facebook vs. Instagram discourse.
-- Live hashtag frequency and trend acceleration velocity.
+- Distinctive term mining for Facebook discourse.
+- Live hashtag frequency and recent topic counts compared with the preceding timestamped window. Window length is selectable in the Trends view. Periods are data-relative and are unavailable when timestamps or records are missing.
 
 ---
 
@@ -239,12 +224,9 @@ META_ACCESS_TOKEN=your_meta_system_or_user_access_token_here
 META_API_VERSION=v21.0
 FACEBOOK_PAGE_ID=your_facebook_page_id_here
 
-# Instagram Graph API Configuration
-INSTAGRAM_ACCESS_TOKEN=your_instagram_user_access_token_here
-INSTAGRAM_ACCOUNT_ID=your_instagram_business_account_id_here
-
-# Crisis Alert Threshold (percentage of negative posts to trigger alarm)
-ALERT_NEGATIVE_THRESHOLD=40.0
+# Required rise in negative sentiment, in percentage points
+ALERT_NEGATIVE_THRESHOLD=35.0
+ALERT_MIN_SAMPLE_SIZE=3
 ```
 
 > [!CAUTION]
@@ -252,23 +234,15 @@ ALERT_NEGATIVE_THRESHOLD=40.0
 
 ---
 
-## 8. REST API Endpoints Directory (59 Endpoints)
+## 8. REST API Endpoints Directory
 
-### Unified Multi-Platform Analytics (`/api/unified`)
-- `GET /api/unified/status` - Aggregated status of Facebook and Instagram connections.
-- `GET /api/unified/metrics` - Total posts, engagement score, sentiment distribution across platforms.
-- `GET /api/unified/feed` - Filterable multi-platform feed with pagination and keyword search.
-- `GET /api/unified/charts` - Donut, trend timeline, and platform comparison datasets.
-- `POST /api/unified/seed-sample` - Re-seed verified multi-platform demonstration data.
-- `GET /api/unified/export` - Export unified social data to CSV.
-
-### Instagram Graph API (`/instagram`)
-- `GET /instagram/status` - Verify Instagram Professional account connectivity and permissions.
-- `GET /instagram/media` - Fetch Instagram media items (caption, timestamp, likes, comments).
-- `POST /instagram/analyze` - Run TF-IDF + Naive Bayes sentiment analysis on Instagram captions.
-- `GET /instagram/media/{media_id}/comments` - Fetch comments for an Instagram post.
-- `POST /instagram/media/{media_id}/comments/analyze` - Run sentiment analysis on post comments.
-- `POST /instagram/import-dataset` - Ingest Instagram posts into backend dataset pipeline.
+### Facebook Analytics (`/api/unified`)
+- `GET /api/unified/status` - Facebook connection status and record counts.
+- `GET /api/unified/metrics` - Facebook post and comment metrics.
+- `GET /api/unified/feed` - Filtered Facebook feed with pagination and keyword search.
+- `GET /api/unified/charts` - Sentiment, timeline, and Facebook post metrics.
+- `POST /api/unified/seed-sample` - Load Facebook demonstration data.
+- `GET /api/unified/export` - Export Facebook records to CSV.
 
 ### Facebook Graph API (`/facebook`)
 - `GET /facebook/status` - Verify Facebook Page token and account connectivity.
@@ -279,35 +253,31 @@ ALERT_NEGATIVE_THRESHOLD=40.0
 - `POST /facebook/import-dataset` - Import Facebook feed into dataset pipeline.
 
 ### Aspect-Based Sentiment Analysis (`/api/aspects`)
-- `GET /api/aspects/summary` - Aggregated polarity scores and counts for 7 commercial dimensions.
+- `GET /api/aspects/summary` - Aggregated polarity counts for configured Facebook aspects, including mixed-item counts.
 - `GET /api/aspects/config` - Get active commercial aspect definitions.
 - `POST /api/aspects/config` - Update or customize commercial aspect keywords.
 - `POST /api/aspects/analyze-text` - Live sandbox: test arbitrary text for clause-level aspects.
 
 ### Engagement Analytics (`/api/engagement-stats`)
 - `GET /api/engagement-stats/summary` - Aggregate likes, comments, shares, and engagement rates.
-- `GET /api/engagement-stats/by-platform` - Compare Facebook vs Instagram engagement dynamics.
+- `GET /api/engagement-stats/by-platform` - Facebook engagement metrics.
 - `GET /api/engagement-stats/top-posts` - Ranked list of highest-performing content.
 - `GET /api/engagement-stats/sentiment-correlation` - Interaction distribution across sentiment classes.
 - `GET /api/engagement-stats/best-posting-times` - Heatmap analysis of high-engagement time windows.
 
 ### Viral Post Potential (`/api/viral`)
-- `GET /api/viral/ranked` - Posts ranked by viral potential score (0-100).
-- `GET /api/viral/factors/{post_id}` - Factor-by-factor breakdown of a post's viral score.
-- `POST /api/viral/simulate` - Live simulator: score marketing copy before publication.
+- `GET /api/viral/ranked-posts` - Facebook posts ranked by explainable viral potential score (0-100).
+- `GET /api/viral/recommendations` - Recommendations with observed Facebook analytics as evidence.
+- `POST /api/viral/score-draft` - Score draft copy and show the factor breakdown.
 
 ### Crisis Alerts & Incident Surveillance (`/api/alerts`)
-- `GET /api/alerts/list` - Incident surveillance feed (active, reviewed, resolved).
-- `GET /api/alerts/stats` - Crisis monitoring statistics and negative sentiment ratios.
+- `GET /api/alerts` - Historical Facebook alerts, status filters, and summary.
+- `POST /api/alerts/refresh` - Compare the newest timestamped window with its predecessor.
 - `POST /api/alerts/{alert_id}/status` - Update alert status (`reviewed` or `resolved`).
-- `GET /api/alerts/threshold` - Fetch active spike threshold.
-- `POST /api/alerts/threshold` - Update active spike threshold.
+- `GET /api/alerts/config` / `POST /api/alerts/config` - Read or update rise threshold and minimum sample size.
 
 ### Trend & Keyword Discovery (`/api/trends-discovery`)
-- `GET /api/trends-discovery/keywords` - Top frequent keywords with sentiment associations.
-- `GET /api/trends-discovery/hashtags` - Top hashtags across Instagram and Facebook.
-- `GET /api/trends-discovery/emerging` - Emerging terms experiencing growth velocity.
-- `GET /api/trends-discovery/platform-comparison` - Distinctive terms per platform.
+- `GET /api/trends-discovery/summary?platform=facebook&period_days=7` - Keywords, hashtags, daily sentiment, consecutive-period comparison, and timestamp-based emerging topics.
 
 ### Model Evaluation & Benchmark (`/api/sentiment`)
 - `GET /api/sentiment/models` - Registered sentiment models metadata.
@@ -328,41 +298,31 @@ Follow this step-by-step walkthrough to present the project to academic examiner
 
 ### Step 1: System Architecture & Command Center (`/dashboard`)
 1. Open `http://localhost:5173/dashboard`.
-2. Explain the **Multi-Platform Analytics** design:
-   - Highlight the total items ingested across platforms.
-   - Point to the **Social Channel Status** cards showing Facebook Page & Instagram Business operational states.
-   - Showcase the **Overall Sentiment Share** (Donut chart) and **Platform Comparison Benchmark** (Positive vs Negative ratio).
+2. Explain the **Facebook Analytics** view:
+   - Highlight Facebook posts and comments ingested.
+   - Point to the Facebook Page connection status.
+   - Showcase the **Facebook Sentiment Share** chart and post engagement metrics.
 
-### Step 2: Unified Cross-Platform Analytics (`/unified`)
-1. Navigate to **Unified Analytics** in the sidebar.
-2. Demonstrate the **Platform Filter**:
-   - Click **Facebook**: Cards, charts, and table filter down immediately to Facebook records.
-   - Click **Instagram**: Instant update to Instagram media and captions.
-   - Click **All Platforms**: View normalized cross-platform view.
-3. Demonstrate the **Export CSV** button: Downloads normalized records.
-
-### Step 3: Instagram Business Intelligence (`/instagram`)
-1. Navigate to **Instagram Business** in the sidebar.
-2. Explain the Meta Graph API v21.0 authentication flow (Professional Account linked to Facebook Page).
-3. Click **Check Status** to inspect token validity, required permissions (`instagram_basic`, `instagram_manage_comments`), and account ID.
-4. Click **Inspect Comments** on any post to demonstrate comment-level sentiment analysis.
+### Step 2: Facebook Analytics (`/unified`)
+1. Navigate to **Facebook Analytics** in the sidebar.
+2. Review Facebook metrics, sentiment charts, and the normalized feed.
+3. Demonstrate the **Export CSV** button for stored Facebook records.
 
 ### Step 4: Aspect-Based Sentiment Analysis (ABSA) (`/aspects`)
 1. Navigate to **Aspect-Based ABSA** in the sidebar.
 2. Explain how ABSA overcomes traditional document-level sentiment:
-   - Review the 7 commercial dimensions (*Product Quality, Customer Service, Delivery, etc.*).
+   - Review configured dimensions (*Product Quality, Customer Service, Delivery, Location, etc.*).
    - Show how the system captures positive and negative quotes under each dimension.
 3. In the **Live Clause-Level Aspect Analyzer**:
-   - Enter: `"The smartphone camera is unbelievable, but the battery life is terrible and customer support never answered."`
+   - Enter: `"The camera is excellent, but the battery is terrible. Customer support never answered."`
    - Click **Analyze Aspect Clauses**.
    - Show that the model detects:
-     - `Product Quality`: **Positive** (*camera is unbelievable*)
-     - `Reliability / Battery`: **Negative** (*battery life is terrible*)
+     - `Product Quality`: **Mixed** (camera positive, battery negative)
      - `Customer Service`: **Negative** (*support never answered*)
 
 ### Step 5: Viral Potential & Engagement Dynamics (`/viral-potential` & `/engagement-analytics`)
 1. Navigate to **Viral Potential**.
-2. Explain the 5 transparent heuristic factors that drive the score ($0-100$).
+2. Explain the experimental heuristic factors behind the score ($0-100$); it is not a trained viral prediction or probability and does not measure engagement growth.
 3. In the **Interactive Draft Simulator**:
    - Type a test post with high engagement markers and hashtags.
    - Click **Simulate Viral Potential** to inspect instant score and feedback.
@@ -372,8 +332,8 @@ Follow this step-by-step walkthrough to present the project to academic examiner
 
 ### Step 6: Crisis Surveillance & Alert Management (`/alerts`)
 1. Navigate to **Crisis Alerts**.
-2. Explain the real-time threshold monitoring (e.g., alert triggers when negative sentiment > 40%).
-3. Show an active crisis incident:
+2. Explain the threshold: the default alert requires a 35 percentage-point increase across consecutive timestamped seven-day windows and at least 3 items in each window.
+3. Review an active potential-issue alert only when real Facebook records meet both sample and rise thresholds:
    - Click **Mark Reviewed** then **Resolve Incident**.
    - Show status updating seamlessly in SQLite.
 
@@ -391,9 +351,22 @@ Follow this step-by-step walkthrough to present the project to academic examiner
 
 ---
 
+### Focused Facebook analytics regression tests
+
+From `social-media-analytics-backend/` run:
+
+```powershell
+.\venv\Scripts\python.exe -m unittest test_feature_analytics -v
+```
+
+These tests use in-memory fixtures and do not seed Facebook records. Period comparisons end at the latest stored timestamp, so they describe the contents of stored data rather than asserting that records are current.
+
 ## 10. Contributors & License
 
 - **Project Lead**: College Major Project Team
 - **Repository**: [Sentiment-Analysis-Using-Big-Data-Analysis](https://github.com/gagansathya86-spec/Sentiment-Analysis-Using-Big-Data-Analysis)
 - **Academic Year**: 2026
 - **License**: Released for academic and research evaluation purposes.
+# Authentication and real HDFS setup
+
+Application login, account creation, protected API behavior, real WebHDFS storage, backfill, Docker/WSL single-node Hadoop setup, and test commands are documented in [AUTH_HDFS_SETUP.md](AUTH_HDFS_SETUP.md). SQLite remains the application and fallback data store; HDFS status is reported as unconfigured until a reachable WebHDFS endpoint is configured.

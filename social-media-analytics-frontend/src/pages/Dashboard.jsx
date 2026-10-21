@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  LayoutDashboard, MessageSquare, Heart, TrendingUp, AlertTriangle, ShieldCheck, 
+  LayoutDashboard, MessageSquare, Heart, TrendingUp, AlertTriangle, ShieldCheck, Database, 
   Layers, RefreshCw, ArrowRight, Zap, Sparkles, CheckCircle2 
 } from 'lucide-react';
-import { FbIcon, IgIcon } from '../components/BrandIcons';
+import { FbIcon } from '../components/BrandIcons';
 import { 
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, 
   Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid 
@@ -12,7 +12,7 @@ import {
 
 import { 
   getUnifiedStatus, getUnifiedMetrics, getUnifiedCharts, 
-  getAlerts, seedSampleData 
+  getAlerts, seedSampleData, clearSampleData, getHdfsStatus, getHdfsSummary, exportFacebookToHdfs
 } from '../services/api';
 import { DatasetContext } from '../context/DatasetContext';
 import MetricCard from '../components/ui/MetricCard';
@@ -33,19 +33,55 @@ const Dashboard = () => {
   const { datasetId, filename } = useContext(DatasetContext);
   
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [status, setStatus] = useState(null);
   const [metrics, setMetrics] = useState(null);
   const [charts, setCharts] = useState(null);
   const [recentAlerts, setRecentAlerts] = useState([]);
   const [seeding, setSeeding] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+  const [hdfsStatus, setHdfsStatus] = useState(null);
+  const [hdfsSummary, setHdfsSummary] = useState(null);
+  const [hdfsBusy, setHdfsBusy] = useState(false);
+  const [hdfsMessage, setHdfsMessage] = useState('');
 
-  const fetchOverview = async () => {
+  const refreshHdfs = async () => {
+    try {
+      const statusResult = await getHdfsStatus();
+      setHdfsStatus(statusResult.data);
+      if (statusResult.data.available) {
+        const summaryResult = await getHdfsSummary();
+        setHdfsSummary(summaryResult.data);
+      } else {
+        setHdfsSummary(null);
+      }
+    } catch (err) {
+      setHdfsMessage(err.response?.data?.detail?.message || 'HDFS storage status could not be checked.');
+    }
+  };
+
+  const handleHdfsBackfill = async () => {
+    setHdfsBusy(true);
+    setHdfsMessage('');
+    try {
+      const result = await exportFacebookToHdfs(false);
+      setHdfsMessage(`Verified ${result.data.files_written} HDFS files (${result.data.posts_exported} posts, ${result.data.comments_exported} comments) at ${result.data.hdfs_root}.`);
+      await refreshHdfs();
+    } catch (err) {
+      setHdfsMessage(err.response?.data?.detail?.message || 'HDFS export failed. Existing SQLite data is preserved.');
+    } finally {
+      setHdfsBusy(false);
+    }
+  };
+
+  const fetchOverview = async (isDemo = demoMode) => {
     setLoading(true);
+    setLoadError('');
     try {
       const [statusRes, metricsRes, chartsRes, alertsRes] = await Promise.all([
-        getUnifiedStatus(),
-        getUnifiedMetrics('all'),
-        getUnifiedCharts('all'),
+        getUnifiedStatus(isDemo),
+        getUnifiedMetrics('all', isDemo),
+        getUnifiedCharts('all', isDemo),
         getAlerts('active', 'all')
       ]);
       setStatus(statusRes.data);
@@ -54,20 +90,39 @@ const Dashboard = () => {
       setRecentAlerts(alertsRes.data.alerts?.slice(0, 3) || []);
     } catch (err) {
       console.error(err);
+      setLoadError('Facebook demonstration data could not be loaded.');
+      setLoadError('Could not load the Facebook dashboard. Check the backend connection and retry.');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchOverview();
-  }, []);
+    fetchOverview(demoMode);
+  }, [demoMode]);
+
+  useEffect(() => { refreshHdfs(); }, []);
 
   const handleSeedData = async () => {
     setSeeding(true);
     try {
       await seedSampleData();
-      await fetchOverview();
+      setDemoMode(true);
+      await fetchOverview(true);
+    } catch (err) {
+      console.error(err);
+      setLoadError('Facebook demonstration data could not be cleared.');
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleClearData = async () => {
+    setSeeding(true);
+    try {
+      await clearSampleData();
+      setDemoMode(false);
+      await fetchOverview(false);
     } catch (err) {
       console.error(err);
     } finally {
@@ -82,20 +137,80 @@ const Dashboard = () => {
         <div>
           <SectionHeader 
             title="Social Intelligence Command Center" 
-            subtitle="Big Data-based sentiment analysis, user behavior mining, and cross-platform intelligence across Facebook and Instagram."
+            subtitle="Big Data-based sentiment analysis, user behavior mining, and social intelligence for Facebook."
           />
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <button className="btn-secondary" onClick={handleSeedData} disabled={seeding}>
-            <RefreshCw size={15} className={seeding ? 'animate-spin' : ''} /> 
-            {seeding ? 'Loading Demo...' : 'Load Demo Data'}
-          </button>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+          {demoMode || status?.has_sample_data ? (
+            <button className="btn-secondary" onClick={handleClearData} disabled={seeding} style={{ borderColor: 'var(--warning)', color: 'var(--warning)' }}>
+              Clear Demo Data
+            </button>
+          ) : (
+            <button className="btn-secondary" onClick={handleSeedData} disabled={seeding}>
+              <Sparkles size={15} /> 
+              {seeding ? 'Loading Demo...' : 'Load Demo Data'}
+            </button>
+          )}
           <button className="btn-primary" onClick={() => navigate('/unified')}>
-            Unified View <ArrowRight size={15} />
+            Facebook Analytics <ArrowRight size={15} />
           </button>
         </div>
       </div>
+
+      {loadError && <div role="alert" style={{ color: 'var(--error)', marginBottom: '1rem' }}>{loadError}</div>}
+      {loading && <div style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>Loading Facebook analytics…</div>}
+
+      <section aria-label="HDFS storage" style={{ margin: '0 0 1.5rem', padding: '1rem 1.2rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius)', background: 'var(--sidebar-bg)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Database size={21} color="var(--primary)" />
+            <div>
+              <strong style={{ color: 'var(--text-main)' }}>Hadoop HDFS storage</strong>
+              <div style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 3 }}>
+                {hdfsStatus?.available ? `Connected · ${hdfsStatus.webhdfs_url} · root ${hdfsStatus.root_path}` : hdfsStatus?.message || 'Checking WebHDFS…'}
+              </div>
+              {hdfsSummary && <div style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>
+                Read back {hdfsSummary.files_read} processed files · {hdfsSummary.posts} posts · {hdfsSummary.comments} comments · sentiment {Object.entries(hdfsSummary.sentiment_counts || {}).map(([k, v]) => `${k} ${v}`).join(', ') || '—'}
+              </div>}
+              {hdfsMessage && <div role="status" style={{ color: hdfsMessage.toLowerCase().includes('failed') ? 'var(--error)' : 'var(--text-muted)', fontSize: 13, marginTop: 4 }}>{hdfsMessage}</div>}
+            </div>
+          </div>
+          <button className="btn-secondary" onClick={handleHdfsBackfill} disabled={hdfsBusy || !hdfsStatus?.available} title="Backfill real Facebook records from SQLite to HDFS and verify writes">
+            <Database size={15} /> {hdfsBusy ? 'Exporting…' : 'Backfill Facebook data'}
+          </button>
+        </div>
+        {hdfsSummary?.files?.length > 0 && <details style={{ marginTop: 10, color: 'var(--text-muted)', fontSize: 12 }}>
+          <summary>Verified HDFS files ({hdfsSummary.files.length})</summary>
+          <ul style={{ maxHeight: 130, overflow: 'auto', wordBreak: 'break-all' }}>{hdfsSummary.files.slice(0, 30).map((file) => <li key={file}>{file}</li>)}</ul>
+        </details>}
+      </section>
+
+      {/* Demo Mode Notice Banner */}
+      {(demoMode || status?.has_sample_data) && (
+        <div style={{ 
+          padding: '0.75rem 1.25rem', 
+          backgroundColor: 'rgba(234, 179, 8, 0.1)', 
+          border: '1px solid rgba(234, 179, 8, 0.3)', 
+          borderRadius: 'var(--radius)', 
+          marginBottom: '1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.75rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--warning)' }}>
+            <Sparkles size={18} />
+            <span style={{ fontSize: '0.85rem' }}>
+              <strong>Demo Mode Active:</strong> Dashboard is currently displaying sample records for demonstration.
+            </span>
+          </div>
+          <button onClick={handleClearData} className="btn-secondary" style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', borderColor: 'var(--warning)', color: 'var(--warning)' }}>
+            Switch to Live Data
+          </button>
+        </div>
+      )}
 
       {/* Active Alerts Banner if any */}
       {recentAlerts.length > 0 && (
@@ -115,7 +230,7 @@ const Dashboard = () => {
             <AlertTriangle size={20} color="var(--error)" />
             <div>
               <span style={{ fontWeight: 600, color: 'var(--error)' }}>
-                {recentAlerts.length} Active Negative Sentiment Incident(s) Detected
+                {recentAlerts.length} Potential Negative Sentiment Increase(s) Need Review
               </span>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 Latest: {recentAlerts[0]?.title}
@@ -141,7 +256,7 @@ const Dashboard = () => {
               <FbIcon size={22} color="#1877f2" />
             </div>
             <div>
-              <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Facebook Integration</div>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Facebook Integration (Active)</div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                 {status?.facebook?.posts_count || 0} Posts, {status?.facebook?.comments_count || 0} Comments Ingested
               </div>
@@ -150,47 +265,19 @@ const Dashboard = () => {
 
           <div style={{ textAlign: 'right' }}>
             <span className={`badge ${status?.facebook?.configured ? 'badge-primary' : 'badge-neutral'}`} style={{ fontSize: '0.75rem' }}>
-              {status?.facebook?.configured ? 'Configured' : 'Offline'}
+              {status?.facebook?.configured ? 'Live Active' : 'Offline'}
             </span>
             <div style={{ marginTop: '0.4rem' }}>
               <button 
                 onClick={() => navigate('/facebook')} 
                 style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
               >
-                Inspect <ArrowRight size={12} />
+                Inspect Facebook <ArrowRight size={12} />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Instagram Channel Card */}
-        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderLeft: '4px solid #e1306c' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: 'rgba(225, 48, 108, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <IgIcon size={22} color="#e1306c" />
-            </div>
-            <div>
-              <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Instagram Professional</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                {status?.instagram?.posts_count || 0} Posts, {status?.instagram?.comments_count || 0} Comments Ingested
-              </div>
-            </div>
-          </div>
-
-          <div style={{ textAlign: 'right' }}>
-            <span className={`badge ${status?.instagram?.configured ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.75rem' }}>
-              {status?.instagram?.configured ? 'Configured' : 'Offline'}
-            </span>
-            <div style={{ marginTop: '0.4rem' }}>
-              <button 
-                onClick={() => navigate('/instagram')} 
-                style={{ fontSize: '0.75rem', color: '#e1306c', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
-              >
-                Inspect <ArrowRight size={12} />
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* KPI Cards */}
@@ -199,7 +286,7 @@ const Dashboard = () => {
           title="Total Monitored" 
           value={metrics ? metrics.total_records.toLocaleString() : '0'} 
           icon={Layers} 
-          subtitle="Multi-platform items" 
+          subtitle="Facebook posts and comments" 
         />
         <MetricCard 
           title="Positive Perception" 
@@ -214,10 +301,10 @@ const Dashboard = () => {
           subtitle={`${metrics?.sentiment_counts.negative || 0} negative items`} 
         />
         <MetricCard 
-          title="Engagement Volume" 
-          value={metrics ? metrics.engagement.total_engagement_score.toLocaleString() : '0'} 
+          title={metrics?.engagement.total_engagement_score != null ? 'Engagement Volume' : 'Observed Engagement Subtotal'} 
+          value={metrics?.engagement.total_engagement_score != null ? metrics.engagement.total_engagement_score.toLocaleString() : (metrics?.engagement.observed_engagement_subtotal ?? 'Unavailable').toLocaleString()} 
           icon={Heart} 
-          subtitle={`Score = L + 2C + 3S`} 
+          subtitle={metrics?.engagement.total_engagement_score != null ? 'Score = L + 2C + 3S' : `Likes + 2×comments; shares unavailable for ${metrics?.engagement.shares_unavailable_posts ?? 0} posts`} 
         />
       </div>
 
@@ -252,7 +339,7 @@ const Dashboard = () => {
           )}
         </ChartCard>
 
-        <ChartCard title="Platform Comparison Benchmark" subtitle="Activity volume by network">
+        <ChartCard title="Facebook Post Engagement" subtitle="Post volume and average likes">
           {charts?.platform_comparison && charts.platform_comparison.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={charts.platform_comparison} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -267,7 +354,7 @@ const Dashboard = () => {
             </ResponsiveContainer>
           ) : (
             <div style={{ height: '260px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-              No comparison records available.
+              No Facebook post records available.
             </div>
           )}
         </ChartCard>
@@ -282,7 +369,7 @@ const Dashboard = () => {
             <h4 style={{ margin: 0 }}>Aspect-Based Sentiment</h4>
           </div>
           <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-            Fine-grained sentiment across Quality, Pricing, Customer Support, Delivery, and Usability.
+            Clause-level opinions for quality, price, service, delivery, location, and other configured topics.
           </p>
         </div>
 
@@ -292,7 +379,7 @@ const Dashboard = () => {
             <h4 style={{ margin: 0 }}>Viral Potential Estimator</h4>
           </div>
           <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-            Multi-factor scoring algorithm ranking posts by comment velocity, timing, and emotional resonance.
+            Experimental heuristic ranking using stored post reactions, comments, shares, and sentiment signals.
           </p>
         </div>
 
@@ -302,7 +389,25 @@ const Dashboard = () => {
             <h4 style={{ margin: 0 }}>Crisis & Spike Alerts</h4>
           </div>
           <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-            Automated monitoring detecting sudden surges in negative customer feedback.
+            Period-over-period Facebook sentiment changes with sample thresholds and supporting evidence.
+          </p>
+        </div>
+        <div className="card" onClick={() => navigate('/trends')} style={{ cursor: 'pointer', transition: 'all 0.2s' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <TrendingUp size={20} color="var(--primary)" />
+            <h4 style={{ margin: 0 }}>Facebook Trends</h4>
+          </div>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+            Compare sentiment over configurable stored-data windows and review timestamped emerging topics.
+          </p>
+        </div>
+        <div className="card" onClick={() => navigate('/viral-potential')} style={{ cursor: 'pointer', transition: 'all 0.2s' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <CheckCircle2 size={20} color="var(--success)" />
+            <h4 style={{ margin: 0 }}>Explainable Recommendations</h4>
+          </div>
+          <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+            Review actions tied to observed Facebook engagement and aspect-level feedback evidence.
           </p>
         </div>
       </div>

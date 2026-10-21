@@ -17,28 +17,15 @@ export const FacebookIcon = ({ size = 20, color = 'currentColor', className = ''
   </svg>
 );
 
-export const InstagramIcon = ({ size = 20, color = 'currentColor', className = '', style = {} }) => (
-  <svg 
-    width={size} 
-    height={size} 
-    viewBox="0 0 24 24" 
-    fill="none" 
-    stroke={color} 
-    strokeWidth="2" 
-    strokeLinecap="round" 
-    strokeLinejoin="round" 
-    className={className}
-    style={style}
-  >
-    <rect width="20" height="20" x="2" y="2" rx="5" ry="5"/>
-    <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
-    <line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/>
+export const FbIcon = FacebookIcon;
+export const Facebook = FacebookIcon;
+
+export const IgIcon = ({ size = 20, color = 'currentColor', className = '', style = {} }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style} aria-hidden="true">
+    <rect x="3" y="3" width="18" height="18" rx="5" />
+    <circle cx="12" cy="12" r="4" />
+    <circle cx="18" cy="6" r="0.8" fill={color} stroke="none" />
   </svg>
 );
 
-export const FbIcon = FacebookIcon;
-export const IgIcon = InstagramIcon;
-export const Facebook = FacebookIcon;
-export const Instagram = InstagramIcon;
-
-export default { FacebookIcon, InstagramIcon, FbIcon, IgIcon, Facebook, Instagram };
+export default { FacebookIcon, FbIcon, Facebook };

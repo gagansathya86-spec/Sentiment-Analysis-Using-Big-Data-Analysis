@@ -8,6 +8,9 @@ from pydantic import BaseModel
 from typing import Dict, Any, List, Optional
 
 from analytics import aspect_analysis
+from api.facebook import ACTIVE_PAGE_STATE
+from api.instagram import ACTIVE_INSTAGRAM_STATE
+from config import settings
 
 router = APIRouter(prefix="/api/aspects", tags=["Aspect Analysis"])
 
@@ -22,9 +25,13 @@ class UpdateAspectConfigRequest(BaseModel):
 
 
 @router.get("/summary")
-def get_aspect_summary(platform: Optional[str] = Query(None)):
+def get_aspect_summary(platform: Optional[str] = Query(None), account_id: Optional[str] = Query(None)):
     """Returns aggregated aspect-based sentiment metrics across all collected social posts and comments."""
-    return aspect_analysis.get_aspect_analytics_summary(platform=platform)
+    if not account_id and platform == "facebook":
+        account_id = ACTIVE_PAGE_STATE.get("selected_page_id")
+    elif not account_id and platform == "instagram":
+        account_id = ACTIVE_INSTAGRAM_STATE.get("account_id") or settings.INSTAGRAM_ACCOUNT_ID or None
+    return aspect_analysis.get_aspect_analytics_summary(platform=platform, account_id=account_id)
 
 
 @router.get("/config")
@@ -56,8 +63,11 @@ def analyze_single_text(request: AnalyzeTextRequest):
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
         
     detected = aspect_analysis.analyze_text_aspects(request.text, parent_sentiment=request.parent_sentiment)
+    local_labels = {mention["sentiment"] for aspect in detected.values() for mention in aspect.get("mentions", [])} - {"neutral"}
+    overall = "mixed" if len(local_labels) > 1 else next(iter(local_labels), "neutral")
     return {
         "text": request.text,
         "clauses": aspect_analysis.extract_clauses(request.text),
+        "overall_sentiment": overall,
         "detected_aspects": detected
     }

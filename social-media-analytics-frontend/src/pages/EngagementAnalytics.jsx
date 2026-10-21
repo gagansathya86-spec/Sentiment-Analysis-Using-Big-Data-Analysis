@@ -16,6 +16,7 @@ import ChartCard from '../components/ui/ChartCard';
 import SentimentBadge from '../components/ui/SentimentBadge';
 import SectionHeader from '../components/ui/SectionHeader';
 import EmptyState from '../components/ui/EmptyState';
+import { usePlatform } from '../context/PlatformContext';
 
 const CHART_STYLES = {
   grid: { stroke: 'var(--chart-grid)', strokeDasharray: '3 3', vertical: false },
@@ -26,7 +27,7 @@ const CHART_STYLES = {
 };
 
 const EngagementAnalytics = () => {
-  const [platform, setPlatform] = useState('all');
+  const { platform, setPlatform } = usePlatform();
   const [loading, setLoading] = useState(true);
   
   const [overview, setOverview] = useState(null);
@@ -71,7 +72,6 @@ const EngagementAnalytics = () => {
             onChange={(e) => setPlatform(e.target.value)}
             style={{ fontSize: '0.85rem' }}
           >
-            <option value="all">All Sources</option>
             <option value="facebook">Facebook Only</option>
             <option value="instagram">Instagram Only</option>
           </select>
@@ -96,26 +96,26 @@ const EngagementAnalytics = () => {
       {/* KPI Cards */}
       <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
         <MetricCard 
-          title="Total Engagement" 
-          value={overview ? overview.total_engagement_score.toLocaleString() : '0'} 
+          title={overview?.engagement_score_complete ? 'Total Engagement' : 'Observed Engagement Subtotal'} 
+          value={overview?.engagement_score_complete ? overview.total_engagement_score.toLocaleString() : (overview?.observed_engagement_subtotal ?? 'Unavailable').toLocaleString()} 
           icon={TrendingUp} 
-          subtitle="Weighted interactions" 
+          subtitle={overview?.engagement_score_complete ? 'Likes + 2×comments + 3×shares' : `Known subtotal; shares unavailable for ${overview?.shares_unavailable_posts ?? 0} posts`} 
         />
         <MetricCard 
-          title="Average per Post" 
-          value={overview ? overview.average_engagement_per_post : 0} 
+          title={overview?.engagement_score_complete ? 'Average per Post' : 'Observed Average per Post'} 
+          value={overview?.average_engagement_per_post ?? overview?.average_observed_engagement_per_post ?? 'Unavailable'} 
           icon={Award} 
-          subtitle="Score per post" 
+          subtitle={overview?.engagement_score_complete ? 'Complete formula score per post' : 'Observed subtotal per post; shares are unavailable'} 
         />
         <MetricCard 
           title="Total Likes" 
-          value={overview ? overview.total_likes.toLocaleString() : '0'} 
+          value={overview?.total_likes != null ? overview.total_likes.toLocaleString() : 'Unavailable'} 
           icon={Heart} 
           subtitle="Reaction base" 
         />
         <MetricCard 
           title="Total Comments" 
-          value={overview ? overview.total_comments.toLocaleString() : '0'} 
+          value={overview?.total_comments != null ? overview.total_comments.toLocaleString() : 'Unavailable'} 
           icon={MessageCircle} 
           subtitle="Direct replies" 
         />
@@ -123,7 +123,7 @@ const EngagementAnalytics = () => {
 
       {/* Charts: Correlation + Timing */}
       <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
-        <ChartCard title="Engagement vs Sentiment Correlation" subtitle="Average engagement score by sentiment class">
+        <ChartCard title="Engagement vs Sentiment Correlation" subtitle="Observed subtotal by sentiment; complete formula averages remain unavailable when shares are missing">
           {correlation?.data && correlation.data.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={correlation.data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -131,7 +131,7 @@ const EngagementAnalytics = () => {
                 <XAxis dataKey="sentiment" {...CHART_STYLES.axis} />
                 <YAxis {...CHART_STYLES.axis} />
                 <RechartsTooltip contentStyle={CHART_STYLES.tooltip.contentStyle} />
-                <Bar dataKey="avg_score" name="Avg Engagement Score" fill="var(--primary)" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="avg_observed_subtotal" name="Avg Observed Subtotal" fill="var(--primary)" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="avg_comments" name="Avg Comments" fill="#ec4899" radius={[4, 4, 0, 0]} />
                 <Legend verticalAlign="bottom" height={36} />
               </BarChart>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BrainCircuit, Play, CheckCircle, AlertTriangle, Send } from 'lucide-react';
 import { DatasetContext } from '../context/DatasetContext';
 import { trainModel, predictDataset, predictText } from '../services/api';
+import { formatApiError } from '../utils/apiError';
 
 const Sentiment = () => {
   const { datasetId, columnMapping, modelMetrics, setModelMetrics } = useContext(DatasetContext);
@@ -36,7 +37,7 @@ const Sentiment = () => {
       setTrainResult(res.data);
       setModelMetrics(res.data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to train model. Ensure your dataset has a valid sentiment column.');
+      setError(formatApiError(err, 'Failed to train model. Ensure your dataset has a valid sentiment column.'));
     } finally {
       setLoading(false);
     }
@@ -49,7 +50,7 @@ const Sentiment = () => {
       const res = await predictDataset(datasetId);
       setPredictResult(res.data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to predict dataset sentiment.');
+      setError(formatApiError(err, 'Failed to predict dataset sentiment.'));
     } finally {
       setPredicting(false);
     }
@@ -61,7 +62,7 @@ const Sentiment = () => {
       const res = await predictText({ datasetId, texts: [testText] });
       setTestResult(res.data.predictions[0]);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to predict text.');
+      setError(formatApiError(err, 'Failed to predict text.'));
     }
   };
 

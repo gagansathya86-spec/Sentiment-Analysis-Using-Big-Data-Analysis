@@ -1,486 +1,486 @@
+"""Instagram Graph API integration for linked Professional accounts.
+
+This uses the existing Meta user token, encrypted token store, social records,
+sentiment model, and authentication dependency. Tokens never leave the backend.
 """
-Instagram Graph API Integration Router
-Implements Instagram Professional/Business account integration via Meta Graph API.
-Fetches media, comments, and engagement metrics, runs NLP sentiment analysis,
-normalizes data, and enables dataset import into the Big Data pipeline.
-"""
-from fastapi import APIRouter, HTTPException, Query
-from config import settings
-import urllib.request
-import urllib.error
-import json
-import re
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
-import pandas as pd
+import hashlib
+import json
+import logging
+import urllib.error
+import urllib.parse
+import urllib.request
+from typing import Any, Dict, Optional
 
-from services import model_service, dataset_service, social_service
-from utils import file_utils
-from api.facebook import classify_emoji_text, get_best_model_dataset_id
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 
-router = APIRouter(prefix="/instagram", tags=["instagram"])
+from config import settings
+from services import model_service, social_service
+from services import meta_graph
+from services.meta_graph import urlopen as graph_urlopen
+from api.facebook import ACTIVE_PAGE_STATE, _get_user_token, get_best_model_dataset_id
+
+router = APIRouter(prefix="/instagram", tags=["Instagram"])
+logger = logging.getLogger(__name__)
+ACTIVE_INSTAGRAM_STATE: Dict[str, Optional[str]] = {"account_id": None, "account_name": None, "page_id": None}
+GRAPH_HOST = "graph.facebook.com"
+# Fields supported by the Instagram Graph API media object. Keep Page fields
+# (such as Page `name`) in the separate Page discovery query below.
+MEDIA_FIELDS = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count"
 
 
-def _get_active_token() -> str:
-    return (
-        settings.INSTAGRAM_ACCESS_TOKEN
-        or settings.META_ACCESS_TOKEN
-        or settings.FACEBOOK_ACCESS_TOKEN
-        or ""
-    )
+def normalize_instagram_sentiment(value: Any) -> Optional[str]:
+    """Map supported model labels to dashboard categories; unknown stays unknown."""
+    label = str(value).strip().lower()
+    return {"positive": "positive", "negative": "negative", "neutral": "neutral",
+            "4": "positive", "0": "negative", "2": "neutral"}.get(label)
 
 
-def _call_meta_graph(endpoint: str, token: str, params: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    """Helper to query Meta Graph API with comprehensive error parsing."""
-    api_version = getattr(settings, "META_API_VERSION", "v21.0")
-    query_str = f"access_token={token}"
-    if params:
-        for k, v in params.items():
-            query_str += f"&{k}={urllib.parse.quote(str(v))}"
-            
-    url = f"https://graph.facebook.com/{api_version}/{endpoint.lstrip('/')}?{query_str}"
-    
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+class SelectInstagramAccountRequest(BaseModel):
+    account_id: str
+
+
+def _graph(path: str, token: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    query = dict(params or {})
+    query["access_token"] = token
+    url = f"https://{GRAPH_HOST}/{settings.META_API_VERSION}/{path.lstrip('/')}?{urllib.parse.urlencode(query)}"
+    request = urllib.request.Request(url, headers={"User-Agent": "FB-Sentiments-Analytics"})
     try:
-        with urllib.request.urlopen(req, timeout=12) as response:
+        with graph_urlopen(request, timeout=20) as response:
             return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        raw_err = e.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        payload = {}
         try:
-            err_json = json.loads(raw_err)
-            fb_err = err_json.get("error", {})
-            message = fb_err.get("message", str(e))
-            code = fb_err.get("code")
-            subcode = fb_err.get("error_subcode")
-            
-            # Actionable diagnostics
-            if code == 190:
-                if subcode == 463:
-                    detail = f"Meta Token Expired (OAuthException 190/463): The configured access token has expired. Please generate a new User or Page Access Token from Meta Graph API Explorer."
-                else:
-                    detail = f"Invalid Meta Token (OAuthException 190): {message}"
-            elif "permission" in message.lower() or code in (10, 200, 298):
-                detail = f"Missing Meta Permission: {message}. Ensure 'instagram_basic', 'pages_show_list', and 'pages_read_engagement' are granted."
-            else:
-                detail = f"Meta Graph API error ({code}): {message}"
-                
-            raise HTTPException(status_code=e.code, detail=detail)
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=e.code, detail=f"Meta API error ({e.code}): {raw_err}")
-    except urllib.error.URLError as e:
-        raise HTTPException(status_code=502, detail=f"Network error connecting to Meta Graph API: {str(e.reason)}")
+            payload = json.loads(exc.read().decode("utf-8"))
+            meta_error = payload.get("error", {})
+        except (ValueError, UnicodeDecodeError):
+            meta_error = {}
+        code = meta_error.get("code")
+        message = meta_error.get("message") or "Meta Graph API request failed."
+        status = 429 if code == 4 or exc.code == 429 else 401 if code == 190 else 403 if code in (10, 200, 294) else exc.code
+        if status == 429:
+            message = "Meta temporarily rate-limited Instagram requests. Please wait before retrying."
+        raise HTTPException(status_code=status, detail={"message": message, "meta_code": code, "meta_subcode": meta_error.get("error_subcode"), "retry_after_seconds": payload.get("retry_after_seconds"), "rate_limit_source": payload.get("rate_limit_source") or (exc.headers.get("X-Projecti-Meta-Rate-Limit-Source") if exc.headers else None)}) from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise HTTPException(status_code=502, detail="Could not connect to the Meta Graph API.") from exc
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=502, detail="Meta Graph API returned an invalid response.") from exc
 
 
-def _resolve_instagram_account_id(token: str) -> Optional[Dict[str, Any]]:
-    """Discovers connected Instagram Business Account via Facebook Page connection."""
-    configured_id = getattr(settings, "INSTAGRAM_ACCOUNT_ID", "")
-    if configured_id and configured_id.lower() != "auto":
-        return {"id": configured_id, "username": "configured_account", "source": "config"}
-        
-    # Search via /me/accounts
+def _managed_pages(token: str):
+    # Discover Pages first, then query each Page's linked Professional account
+    # with the supported fields. Keep Page tokens backend-side for media calls.
+    result = _graph("me/accounts", token, {"fields": "id,name,access_token", "limit": 100})
+    pages = list(result.get("data") or [])
+    while (next_url := (result.get("paging") or {}).get("next")):
+        parsed = urllib.parse.urlparse(next_url)
+        if parsed.scheme != "https" or parsed.hostname != GRAPH_HOST:
+            raise HTTPException(status_code=502, detail="Meta returned an unexpected pagination URL.")
+        request = urllib.request.Request(next_url, headers={"User-Agent": "FB-Sentiments-Analytics"})
+        try:
+            with graph_urlopen(request, timeout=20) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code == 429:
+                raise
+            raise HTTPException(status_code=502, detail="Could not retrieve the next page of managed accounts from Meta.") from exc
+        except (urllib.error.URLError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="Could not retrieve the next page of managed accounts from Meta.") from exc
+        pages.extend(result.get("data") or [])
+    linked_pages = []
+    for page in pages:
+        page_id = page.get("id")
+        if not page_id:
+            continue
+        linked = _graph(f"{page_id}", token, {"fields": "id,name,instagram_business_account{id,username}"})
+        linked_pages.append({**page, **linked})
+    return linked_pages
+
+
+def _resolve_account():
     try:
-        pages_data = _call_meta_graph("me/accounts", token, {
-            "fields": "id,name,access_token,instagram_business_account{id,username,name,profile_picture_url,followers_count,media_count}"
-        })
-        for page in pages_data.get("data", []):
-            ig_acc = page.get("instagram_business_account")
-            if ig_acc and ig_acc.get("id"):
-                return {
-                    "id": ig_acc.get("id"),
-                    "username": ig_acc.get("username", "instagram_user"),
-                    "name": ig_acc.get("name", page.get("name")),
-                    "profile_picture_url": ig_acc.get("profile_picture_url"),
-                    "followers_count": ig_acc.get("followers_count", 0),
-                    "media_count": ig_acc.get("media_count", 0),
-                    "page_id": page.get("id"),
-                    "page_name": page.get("name"),
-                    "source": "facebook_page_link"
-                }
-    except Exception:
-        pass
-        
-    return None
+        user_token = _get_user_token()
+    except HTTPException:
+        raise
+    if not user_token:
+        raise HTTPException(status_code=503, detail="No Meta user token is configured. Add it in Settings; it will remain encrypted on the backend.")
+    pages = _managed_pages(user_token)
+    configured_page_id = settings.INSTAGRAM_PAGE_ID.strip()
+    explicitly_selected_page = configured_page_id or ACTIVE_INSTAGRAM_STATE.get("page_id") or ""
+    selected_page_id = explicitly_selected_page or ACTIVE_PAGE_STATE.get("selected_page_id") or ""
+    configured_ig_id = settings.INSTAGRAM_ACCOUNT_ID.strip()
+    candidates = [page for page in pages if not selected_page_id or str(page.get("id")) == str(selected_page_id)]
+    if configured_ig_id:
+        candidates = [page for page in candidates if str((page.get("instagram_business_account") or {}).get("id")) == configured_ig_id]
+    linked = next((page for page in candidates if page.get("instagram_business_account")), None)
+    if not linked and not explicitly_selected_page:
+        linked = next((page for page in pages if page.get("instagram_business_account") and (not configured_ig_id or str(page["instagram_business_account"].get("id")) == configured_ig_id)), None)
+    if not linked and configured_page_id:
+        raise HTTPException(status_code=404, detail="The configured Facebook Page was not returned by Meta or has no linked Instagram Professional account.")
+    if not linked:
+        raise HTTPException(status_code=404, detail="No linked Instagram Professional account was found for the selected accessible Facebook Page.")
+    ig_account = linked["instagram_business_account"]
+    if configured_ig_id and str(ig_account.get("id")) != configured_ig_id:
+        raise HTTPException(status_code=403, detail="The Instagram account linked to the configured Page does not match INSTAGRAM_ACCOUNT_ID.")
+    page_token = linked.get("access_token")
+    if not page_token:
+        page_token = user_token
+    if not page_token:
+        raise HTTPException(status_code=503, detail="Meta returned no usable token for the linked Page.")
+    account_id = str(ig_account.get("id") or "")
+    if not account_id:
+        raise HTTPException(status_code=502, detail="Meta did not return an Instagram Professional account ID.")
+    ACTIVE_INSTAGRAM_STATE.update(account_id=account_id, account_name=ig_account.get("username"), page_id=str(linked.get("id")))
+    return {"account": ig_account, "page": linked, "token": page_token, "user_token": user_token}
+
+
+def _permission_report(user_token: str) -> Dict[str, Any]:
+    """Report grants from the current token without treating them as API guarantees."""
+    try:
+        response = _graph("me/permissions", user_token)
+        grants = {str(item.get("permission")): str(item.get("status", "unknown")).lower()
+                  for item in response.get("data", []) if item.get("permission")}
+        return {
+            "available": True,
+            "granted": sorted(name for name, state in grants.items() if state == "granted"),
+            "declined": sorted(name for name, state in grants.items() if state == "declined"),
+            "requirements": {
+                "account_discovery": ["pages_show_list"],
+                "media": ["instagram_basic", "pages_read_engagement"],
+                "comments": ["instagram_manage_comments", "pages_read_engagement"],
+                "insights": ["instagram_manage_insights", "instagram_basic", "pages_read_engagement", "pages_show_list"],
+            },
+            "note": "Grants are token-level indicators. Meta's response to each operation is authoritative for account eligibility, app review, and API-version support.",
+        }
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            raise
+        detail = exc.detail if isinstance(exc.detail, str) else exc.detail
+        return {"available": False, "granted": [], "declined": [], "error": detail}
+
+
+def _paginate(path: str, token: str, params: Dict[str, Any], max_pages: int = 100):
+    result = _graph(path, token, params)
+    rows = list(result.get("data") or [])
+    pages = 1
+    while (next_url := (result.get("paging") or {}).get("next")) and pages < max_pages:
+        parsed = urllib.parse.urlparse(next_url)
+        if parsed.scheme != "https" or parsed.hostname != GRAPH_HOST:
+            raise HTTPException(status_code=502, detail="Meta returned an unexpected pagination URL.")
+        request = urllib.request.Request(next_url, headers={"User-Agent": "FB-Sentiments-Analytics"})
+        try:
+            with graph_urlopen(request, timeout=20) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code == 429:
+                raise
+            raise HTTPException(status_code=exc.code, detail="Meta rejected a paginated data request.") from exc
+        except (urllib.error.URLError, ValueError) as exc:
+            raise HTTPException(status_code=502, detail="Could not retrieve the next page of Instagram data.") from exc
+        rows.extend(result.get("data") or [])
+        pages += 1
+    paging = result.get("paging") or {}
+    return rows, bool(paging.get("next")), (paging.get("cursors") or {}).get("after")
+
+
+def _normalize_media(row: Dict[str, Any], account: Dict[str, Any], page: Dict[str, Any]):
+    return {
+        "id": str(row["id"]), "platform": "instagram", "account_id": str(account["id"]),
+        "account_name": account.get("username") or "Instagram account", "author": account.get("username") or "Instagram account",
+        "text": row.get("caption") or "", "media_type": row.get("media_type") or "UNKNOWN",
+        "media_url": row.get("media_url"), "thumbnail_url": row.get("thumbnail_url"),
+        "permalink": row.get("permalink") or "", "created_time": row.get("timestamp"),
+        "likes_count": row.get("like_count"), "comments_count": row.get("comments_count"), "shares_count": None,
+        "platform_metrics": {"instagram_media_type": row.get("media_type"), "media_url": row.get("media_url"), "thumbnail_url": row.get("thumbnail_url")},
+        "sentiment": "unknown", "sentiment_confidence": 0, "is_sample": 0,
+    }
 
 
 @router.get("/status")
-def get_instagram_status():
-    """Returns current Instagram connection status, token validity, and account info."""
-    token = _get_active_token()
-    sync_info = social_service.get_sync_statuses().get("instagram", {})
-    
-    if not token:
-        return {
-            "connected": False,
-            "configured": False,
-            "status": "unconfigured",
-            "message": "No Meta / Instagram access token configured in environment (.env).",
-            "account": None,
-            "last_sync": sync_info.get("last_sync"),
-            "required_permissions": ["instagram_basic", "pages_show_list", "pages_read_engagement", "instagram_manage_comments"]
-        }
-        
-    # Test token with Meta API
+def get_instagram_status(refresh: bool = False):
     try:
-        user_info = _call_meta_graph("me", token, {"fields": "id,name"})
-        ig_account = _resolve_instagram_account_id(token)
-        
-        if ig_account:
-            return {
-                "connected": True,
-                "configured": True,
-                "status": "active",
-                "meta_user": user_info,
-                "account": ig_account,
-                "api_flow": "Instagram Graph API via Facebook Page Link (Recommended)",
-                "last_sync": sync_info.get("last_sync"),
-                "message": f"Successfully connected to Instagram Professional Account @{ig_account.get('username')}"
-            }
-        else:
-            return {
-                "connected": False,
-                "configured": True,
-                "status": "no_linked_account",
-                "meta_user": user_info,
-                "account": None,
-                "api_flow": "Instagram Graph API",
-                "message": (
-                    "Token is valid for Meta user, but no connected Instagram Professional/Business "
-                    "account was found on any managed Facebook Pages. Ensure your Instagram account "
-                    "is switched to Professional (Creator or Business) and linked to your Facebook Page."
-                ),
-                "setup_guide": [
-                    "1. Open Instagram App -> Settings -> Account -> Switch to Professional Account.",
-                    "2. Open Facebook Page -> Settings -> Linked Accounts -> Instagram -> Connect Account.",
-                    "3. In Meta Graph API Explorer, select your Page and generate token with 'instagram_basic' and 'pages_show_list'."
-                ],
-                "last_sync": sync_info.get("last_sync")
-            }
-    except HTTPException as e:
-        return {
-            "connected": False,
-            "configured": True,
-            "status": "error",
-            "error_detail": e.detail,
-            "account": None,
-            "last_sync": sync_info.get("last_sync")
-        }
+        if refresh:
+            meta_graph.clear_cache()
+        resolved = _resolve_account()
+        account = resolved["account"]
+        account_id = str(account.get("id") or "")
+        username = account.get("username")
+        if not account_id or not username:
+            raise HTTPException(status_code=502, detail="Meta returned the linked Instagram account without its required ID or username.")
+        return {"connected": True, "status": "active", "account": {"id": account_id, "username": username}, "facebook_page": {"id": str(resolved["page"]["id"]), "name": resolved["page"].get("name")}, "permissions": _permission_report(resolved["user_token"]), "message": "Linked Instagram Professional account is accessible through the configured Meta token."}
+    except HTTPException as exc:
+        if exc.status_code == 429:
+            raise
+        detail = exc.detail if isinstance(exc.detail, str) else exc.detail
+        missing_link = exc.status_code == 404
+        return {"connected": False if missing_link else None, "status": "not_connected" if missing_link else "error", "account": None, "http_status": exc.status_code, "error": detail}
+
+
+@router.get("/accounts")
+def get_instagram_accounts(refresh: bool = False):
+    if refresh:
+        meta_graph.clear_cache()
+    user_token = _get_user_token()
+    if not user_token:
+        raise HTTPException(status_code=503, detail="No Meta user token is configured.")
+    pages = _managed_pages(user_token)
+    page_filter = settings.INSTAGRAM_PAGE_ID.strip()
+    configured_ig_id = settings.INSTAGRAM_ACCOUNT_ID.strip()
+    accounts = []
+    for page in pages:
+        ig = page.get("instagram_business_account") or {}
+        if not ig.get("id") or (page_filter and str(page.get("id")) != page_filter):
+            continue
+        if configured_ig_id and str(ig.get("id")) != configured_ig_id:
+            continue
+        if not ig.get("username"):
+            continue
+        accounts.append({"id": str(ig["id"]), "username": ig["username"], "page_id": str(page["id"]), "page_name": page.get("name")})
+    return {"accounts": accounts, "selected_account_id": ACTIVE_INSTAGRAM_STATE.get("account_id"), "configured_account_id": configured_ig_id or None}
+
+
+@router.post("/select-account")
+def select_instagram_account(request: SelectInstagramAccountRequest):
+    requested_id = request.account_id.strip()
+    options = get_instagram_accounts()["accounts"]
+    account = next((item for item in options if item["id"] == requested_id), None)
+    if not account:
+        raise HTTPException(status_code=403, detail="The Instagram account is not accessible through the authorized Meta token or configured Page.")
+    ACTIVE_INSTAGRAM_STATE.update(account_id=account["id"], account_name=account.get("username"), page_id=account["page_id"])
+    return {"status": "selected", "account": account}
 
 
 @router.get("/media")
-def get_instagram_media(use_stored_if_offline: bool = Query(True)):
-    """Fetches accessible Instagram media/posts."""
-    token = _get_active_token()
-    
-    if not token:
-        if use_stored_if_offline:
-            stored = social_service.get_social_posts(platform="instagram", limit=50)
-            if stored:
-                return {"data": stored, "source": "stored_cache", "message": "Showing stored Instagram posts."}
-        raise HTTPException(status_code=401, detail="Instagram access token is missing or not configured.")
-        
-    try:
-        ig_acc = _resolve_instagram_account_id(token)
-        if not ig_acc:
-            if use_stored_if_offline:
-                stored = social_service.get_social_posts(platform="instagram", limit=50)
-                if stored:
-                    return {"data": stored, "source": "stored_cache", "message": "Showing cached Instagram media."}
-            raise HTTPException(status_code=404, detail="No connected Instagram Professional account found.")
-            
-        endpoint = f"{ig_acc['id']}/media"
-        params = {
-            "fields": "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count"
-        }
-        res = _call_meta_graph(endpoint, token, params)
-        media_items = res.get("data", [])
-        
-        # Normalize items
-        cleaned = []
-        for m in media_items:
-            cleaned.append({
-                "id": m.get("id"),
-                "platform": "instagram",
-                "caption": m.get("caption", ""),
-                "media_type": m.get("media_type", "IMAGE"),
-                "media_url": m.get("media_url", ""),
-                "permalink": m.get("permalink", ""),
-                "created_time": m.get("timestamp"),
-                "likes_count": m.get("like_count", 0),
-                "comments_count": m.get("comments_count", 0),
-                "author": ig_acc.get("username", "instagram_account")
-            })
-        return {"data": cleaned, "source": "meta_graph_api"}
-    except HTTPException as e:
-        if use_stored_if_offline:
-            stored = social_service.get_social_posts(platform="instagram", limit=50)
-            if stored:
-                return {
-                    "data": stored,
-                    "source": "stored_cache",
-                    "api_error": e.detail,
-                    "message": "Live API unavailable (token expired or permission error). Displaying cached records."
-                }
-        raise e
+def get_instagram_media(limit: int = Query(10, ge=1, le=100), after: Optional[str] = Query(None), sync: bool = Query(False), refresh: bool = False):
+    if refresh:
+        meta_graph.clear_cache()
+    resolved = _resolve_account()
+    params: Dict[str, Any] = {"fields": MEDIA_FIELDS, "limit": limit}
+    if after:
+        params["after"] = after
+    rows, has_more, next_cursor = _paginate(f"{resolved['account']['id']}/media", resolved["token"], params, max_pages=1)
+    media = [_normalize_media(row, resolved["account"], resolved["page"]) for row in rows if row.get("id")]
+    if sync:
+        for post in media:
+            social_service.upsert_post(post)
+        social_service.update_sync_status("instagram", "success", records=len(media))
+    return {"data": media, "account": {"id": str(resolved["account"]["id"]), "username": resolved["account"].get("username")}, "paging": {"next": next_cursor, "has_more": has_more}, "synced": sync}
+
+
+@router.post("/sync")
+def sync_instagram_media(max_pages: int = Query(100, ge=1, le=100), refresh: bool = True):
+    if refresh:
+        meta_graph.clear_cache()
+    resolved = _resolve_account()
+    rows, truncated, _ = _paginate(f"{resolved['account']['id']}/media", resolved["token"], {"fields": MEDIA_FIELDS, "limit": 100}, max_pages=max_pages)
+    posts = [_normalize_media(row, resolved["account"], resolved["page"]) for row in rows if row.get("id")]
+    for post in posts:
+        social_service.upsert_post(post)
+    social_service.update_sync_status("instagram", "partial" if truncated else "success", records=len(posts))
+    return {"status": "partial" if truncated else "success", "records_synced": len(posts), "has_more": truncated, "media": posts[:10], "account": {"id": str(resolved["account"]["id"]), "username": resolved["account"].get("username")}, "message": "Instagram media synchronized from Meta. Captions without text remain available as media records but are not sentiment-labeled."}
 
 
 @router.post("/analyze")
 def analyze_instagram_media():
-    """Runs NLP sentiment analysis pipeline on accessible Instagram media captions."""
-    media_response = get_instagram_media(use_stored_if_offline=True)
-    posts = media_response.get("data", [])
-    
-    if not posts:
-        raise HTTPException(status_code=404, detail="No Instagram media items found to analyze.")
-        
-    valid_posts = [p for p in posts if (p.get("caption") or p.get("text", "")).strip()]
-    if not valid_posts:
-        raise HTTPException(status_code=404, detail="No Instagram posts with non-empty captions available.")
-        
-    best_dataset_id = get_best_model_dataset_id()
-    if not best_dataset_id:
-        raise HTTPException(status_code=400, detail="Sentiment model not trained yet. Train a model in Training Pipeline.")
-        
-    captions = [p.get("caption") or p.get("text", "") for p in valid_posts]
-    
+    resolved = _resolve_account()
+    posts = social_service.get_social_posts(platform="instagram", account_id=str(resolved["account"]["id"]), limit=5000)
+    # Keep the full media list in the response so captionless media remains
+    # visible in the dashboard, but only send real, non-empty captions to the model.
+    captioned = [(post, (post.get("text") or post.get("caption") or "").strip()) for post in posts]
+    captioned = [(post, caption) for post, caption in captioned if caption]
+    if not captioned:
+        raise HTTPException(status_code=404, detail="No Instagram captions are stored for sentiment analysis. Synchronize media first.")
+    from nlp.preprocessing import preprocess_text
+    empty_after_preprocessing = [str(post.get("id") or post.get("media_id") or "unknown")
+                                 for post, caption in captioned if not preprocess_text(caption)]
+    if empty_after_preprocessing:
+        raise HTTPException(status_code=400, detail="Instagram captions contain no text supported by the trained model after preprocessing (media IDs: " + ", ".join(empty_after_preprocessing) + ").")
+    dataset_id = get_best_model_dataset_id()
+    if not dataset_id:
+        raise HTTPException(status_code=400, detail="Sentiment model is not trained. Train a model before analyzing Instagram captions.")
     try:
-        pred_res = model_service.predict_texts(best_dataset_id, captions)
-        predictions = pred_res.get("predictions", [])
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Model prediction failed: {str(e)}")
-        
-    positive_count = 0
-    negative_count = 0
-    neutral_count = 0
-    
-    analyzed_posts = []
-    for i, post in enumerate(valid_posts):
-        pred_info = predictions[i]
-        sentiment_label = pred_info.get("predicted_sentiment", "unknown").lower()
-        confidence = pred_info.get("confidence", 0.0)
-        
-        if "positive" in sentiment_label or sentiment_label == "4":
-            sentiment = "positive"
-            positive_count += 1
-        elif "negative" in sentiment_label or sentiment_label == "0":
-            sentiment = "negative"
-            negative_count += 1
+        prediction_result = model_service.predict_texts(dataset_id, [caption for _, caption in captioned])
+    except Exception as exc:
+        logger.exception("Instagram caption prediction failed")
+        raise HTTPException(status_code=500, detail=f"Instagram caption prediction failed: {exc}") from exc
+
+    predictions = prediction_result.get("predictions") if isinstance(prediction_result, dict) else None
+    if not isinstance(predictions, list) or len(predictions) != len(captioned):
+        raise HTTPException(status_code=500, detail="Instagram caption prediction returned an incomplete result. Check the trained model response.")
+
+    classified = {}
+    analyzed = []
+    for (post, caption), prediction in zip(captioned, predictions):
+        if not isinstance(prediction, dict):
+            raise HTTPException(status_code=500, detail="Instagram caption prediction returned an invalid result row.")
+        raw_label = prediction.get("predicted_sentiment")
+        sentiment = normalize_instagram_sentiment(raw_label) if raw_label is not None else None
+        if sentiment is None:
+            raise HTTPException(status_code=500, detail=f"Instagram model returned an unsupported sentiment label: {raw_label!r}.")
+        confidence = prediction.get("confidence")
+        if confidence is not None:
+            try:
+                confidence = float(confidence)
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(status_code=500, detail="Instagram model returned an invalid confidence value.") from exc
+            if not 0 <= confidence <= 1:
+                raise HTTPException(status_code=500, detail="Instagram model returned a confidence value outside the 0–1 range.")
+        media_id = str(post.get("id") or post.get("media_id") or "")
+        if not media_id:
+            raise HTTPException(status_code=500, detail="Instagram caption record is missing its media ID.")
+        post["sentiment"] = sentiment
+        post["sentiment_confidence"] = confidence
+        post["fetched_at"] = datetime.now(timezone.utc).isoformat()
+        social_service.upsert_post(post)
+        result = {**post, "id": media_id, "media_id": media_id, "caption": caption,
+                  "text": caption, "sentiment": sentiment, "sentiment_confidence": confidence,
+                  "prediction": confidence}
+        classified[media_id] = result
+        analyzed.append(result)
+
+    # Return every synchronized media record. Captionless items retain their
+    # stored state and are excluded from successful classification counts.
+    media = []
+    for post in posts:
+        media_id = str(post.get("id") or post.get("media_id") or "")
+        if media_id in classified:
+            media.append(classified[media_id])
         else:
-            sentiment = "neutral"
-            neutral_count += 1
-            
-        post_record = {
-            "id": post.get("id"),
-            "platform": "instagram",
-            "account_name": post.get("author", "instagram"),
-            "author": post.get("author", "instagram"),
-            "text": post.get("caption") or post.get("text", ""),
-            "media_type": post.get("media_type", "IMAGE"),
-            "permalink": post.get("permalink", ""),
-            "created_time": post.get("created_time"),
-            "likes_count": post.get("likes_count", 0),
-            "comments_count": post.get("comments_count", 0),
-            "shares_count": 0,
-            "sentiment": sentiment,
-            "sentiment_confidence": confidence,
-            "is_sample": post.get("is_sample", 0)
-        }
-        
-        # Save to SQLite unified social database
-        social_service.upsert_post(post_record)
-        analyzed_posts.append(post_record)
-        
-    total_analyzed = len(analyzed_posts)
-    social_service.update_sync_status("instagram", "analyzed", total_analyzed)
-    
-    return {
-        "summary": {
-            "total_posts_fetched": len(posts),
-            "posts_analyzed": total_analyzed,
-            "positive_count": positive_count,
-            "negative_count": negative_count,
-            "neutral_count": neutral_count,
-            "positive_percentage": round((positive_count / max(total_analyzed, 1)) * 100, 1),
-            "negative_percentage": round((negative_count / max(total_analyzed, 1)) * 100, 1),
-            "neutral_percentage": round((neutral_count / max(total_analyzed, 1)) * 100, 1)
-        },
-        "analyzed_posts": analyzed_posts
-    }
+            media.append({**post, "id": media_id, "media_id": media_id,
+                          "caption": post.get("text") or post.get("caption") or ""})
+    counts = {name: sum(item["sentiment"] == name for item in analyzed) for name in ("positive", "negative", "neutral")}
+    return {"platform": "instagram", "account_id": str(resolved["account"]["id"]), "media": media,
+            "analyzed_posts": analyzed, "summary": {"posts_analyzed": len(analyzed),
+            "sentiment_counts": counts, "sentiment_percentages": {name: round(value * 100 / len(analyzed), 1) for name, value in counts.items()}}}
 
 
 @router.get("/media/{media_id}/comments")
-def get_instagram_comments(media_id: str):
-    """Fetches comments for an Instagram media item."""
-    token = _get_active_token()
-    if not token:
-        # Fallback to stored comments
-        comments = social_service.get_social_comments(post_id=media_id)
-        if comments:
-            return comments
-        raise HTTPException(status_code=401, detail="Instagram access token is missing or not configured.")
-        
-    try:
-        endpoint = f"{media_id}/comments"
-        params = {"fields": "id,text,timestamp,username,like_count"}
-        res = _call_meta_graph(endpoint, token, params)
-        comments = []
-        for c in res.get("data", []):
-            comments.append({
-                "id": c.get("id"),
-                "post_id": media_id,
-                "platform": "instagram",
-                "message": c.get("text", ""),
-                "author": c.get("username", "instagram_user"),
-                "created_time": c.get("timestamp"),
-                "like_count": c.get("like_count", 0)
-            })
-        return comments
-    except HTTPException as e:
-        # Check stored cache
-        comments = social_service.get_social_comments(post_id=media_id)
-        if comments:
-            return comments
-        raise e
+def get_instagram_comments(media_id: str, limit: int = Query(100, ge=1, le=100), after: Optional[str] = Query(None)):
+    resolved = _resolve_account()
+    parent = social_service.get_social_posts(platform="instagram", account_id=str(resolved["account"]["id"]), limit=5000)
+    if str(media_id) not in {str(post.get("id")) for post in parent}:
+        raise HTTPException(status_code=404, detail="Instagram media was not found in the connected account's synchronized records.")
+    # Instagram comment authors expose username; `from{name}` is a Facebook
+    # Graph field and causes (#100) on Instagram Comment objects.
+    comment_params: Dict[str, Any] = {"fields": "id,text,timestamp,username,like_count", "limit": limit}
+    if after:
+        comment_params["after"] = after
+    rows, has_more, next_cursor = _paginate(f"{media_id}/comments", resolved["token"], comment_params, max_pages=1)
+    comments = []
+    for row in rows:
+        if not row.get("id"):
+            continue
+        item = {"id": str(row["id"]), "post_id": str(media_id), "platform": "instagram", "author": row.get("username") or (row.get("from") or {}).get("name") or "Instagram user", "text": row.get("text") or "", "created_time": row.get("timestamp"), "likes_count": row.get("like_count"), "sentiment": "unknown", "sentiment_confidence": 0, "is_sample": 0, "fetched_at": datetime.now(timezone.utc).isoformat()}
+        social_service.upsert_comment(item)
+        comments.append(item)
+    return {"data": comments, "count": len(comments), "has_more": has_more, "next": next_cursor}
 
 
 @router.post("/media/{media_id}/comments/analyze")
-def analyze_instagram_comments(media_id: str):
-    """Analyzes sentiment for Instagram post comments."""
-    comments = get_instagram_comments(media_id)
-    if not comments:
-        return {
-            "summary": {"total_comments": 0, "comments_analyzed": 0, "positive_count": 0, "negative_count": 0, "positive_percentage": 0.0, "negative_percentage": 0.0},
-            "analyzed_comments": []
-        }
-        
-    best_dataset_id = get_best_model_dataset_id()
-    text_comments = [c for c in comments if re.search(r"[a-zA-Z]", c.get("message", "") or c.get("text", ""))]
-    
-    predictions_map = {}
-    if text_comments and best_dataset_id:
-        texts = [c.get("message") or c.get("text", "") for c in text_comments]
-        try:
-            pred_res = model_service.predict_texts(best_dataset_id, texts)
-            for i, c in enumerate(text_comments):
-                predictions_map[c["id"]] = pred_res["predictions"][i]
-        except Exception:
-            pass
-            
-    positive_count = 0
-    negative_count = 0
-    neutral_count = 0
-    analyzed = []
-    
-    for c in comments:
-        cid = c["id"]
-        raw_text = c.get("message") or c.get("text", "")
-        if cid in predictions_map:
-            p = predictions_map[cid]
-            lbl = p.get("predicted_sentiment", "").lower()
-            conf = p.get("confidence", 0.0)
-            if "positive" in lbl or lbl == "4":
-                sentiment = "positive"
-                positive_count += 1
-            elif "negative" in lbl or lbl == "0":
-                sentiment = "negative"
-                negative_count += 1
-            else:
-                sentiment = "neutral"
-                neutral_count += 1
+def analyze_instagram_comments(media_id: str, limit: int = Query(100, ge=1, le=100), after: Optional[str] = Query(None)):
+    fetched = get_instagram_comments(media_id, limit=limit, after=after)
+    comments = fetched["data"]
+    nonempty = [comment for comment in comments if (comment.get("text") or "").strip()]
+    if not nonempty:
+        return {"platform": "instagram", "post_id": str(media_id), "analyzed_comments": [], "message": "No accessible non-empty Instagram comments were returned."}
+    version = "instagram_shared_model_v1"
+    stored = {str(item.get("id")): item for item in social_service.get_social_comments(post_id=media_id, limit=5000, platform="instagram")}
+    pending = []
+    analyzed_by_id = {}
+    for comment in nonempty:
+        text_hash = hashlib.sha256(comment["text"].encode("utf-8")).hexdigest()
+        previous = stored.get(str(comment["id"]))
+        if previous and previous.get("text_hash") == text_hash and previous.get("analysis_version") == version and previous.get("sentiment") in {"positive", "negative", "neutral"}:
+            analyzed_by_id[str(comment["id"])] = previous
         else:
-            sentiment = classify_emoji_text(raw_text)
-            conf = 0.75
-            if sentiment == "positive":
-                positive_count += 1
-            elif sentiment == "negative":
-                negative_count += 1
+            pending.append((comment, text_hash))
+    if pending:
+        dataset_id = get_best_model_dataset_id()
+        if not dataset_id:
+            raise HTTPException(status_code=400, detail="Sentiment model is not trained. Train a model before analyzing Instagram comments.")
+        predictions = model_service.predict_texts(dataset_id, [comment["text"] for comment, _ in pending]).get("predictions", [])
+        for (comment, text_hash), prediction in zip(pending, predictions):
+            comment["sentiment"] = str(prediction.get("predicted_sentiment") or "unknown").lower()
+            comment["sentiment_confidence"] = prediction.get("confidence")
+            comment["analyzed_at"] = datetime.now(timezone.utc).isoformat()
+            comment["text_hash"] = text_hash
+            comment["analysis_version"] = version
+            social_service.upsert_comment(comment)
+            analyzed_by_id[str(comment["id"])] = comment
+    nonempty = [analyzed_by_id.get(str(comment["id"]), comment) for comment in nonempty]
+    return {"platform": "instagram", "post_id": str(media_id), "analyzed_comments": nonempty, "has_more": fetched["has_more"], "next": fetched["next"]}
+
+
+@router.get("/media/{media_id}/insights")
+def get_instagram_media_insights(media_id: str, refresh: bool = False):
+    """Fetch current-version media insight metrics independently, preserving unsupported values as unavailable."""
+    if refresh:
+        meta_graph.clear_cache()
+    resolved = _resolve_account()
+    posts = social_service.get_social_posts(platform="instagram", account_id=str(resolved["account"]["id"]), limit=5000)
+    post = next((row for row in posts if str(row.get("id")) == str(media_id)), None)
+    if not post:
+        raise HTTPException(status_code=404, detail="Instagram media was not found in the connected account's synchronized records.")
+    metric_names = ("reach", "saved", "shares", "total_interactions")
+    metrics: Dict[str, Any] = {}
+    errors: Dict[str, Any] = {}
+    statuses: Dict[str, str] = {}
+    for metric in metric_names:
+        try:
+            result = _graph(f"{media_id}/insights", resolved["token"], {"metric": metric})
+            rows = result.get("data") or []
+            metrics[metric] = rows[0] if rows else None
+            if not rows:
+                statuses[metric] = "not_supported"
+                errors[metric] = "Meta returned no value for this metric on this media item."
             else:
-                sentiment = "neutral"
-                neutral_count += 1
-                
-        record = {
-            "id": cid,
-            "post_id": media_id,
-            "platform": "instagram",
-            "author": c.get("author", "User"),
-            "text": raw_text,
-            "created_time": c.get("created_time"),
-            "likes_count": c.get("like_count") or c.get("likes_count", 0),
-            "sentiment": sentiment,
-            "sentiment_confidence": conf
-        }
-        social_service.upsert_comment(record)
-        analyzed.append(record)
-        
-    total = len(analyzed)
-    return {
-        "summary": {
-            "total_comments": total,
-            "comments_analyzed": total,
-            "positive_count": positive_count,
-            "negative_count": negative_count,
-            "neutral_count": neutral_count,
-            "positive_percentage": round((positive_count / max(total, 1)) * 100, 1),
-            "negative_percentage": round((negative_count / max(total, 1)) * 100, 1)
-        },
-        "analyzed_comments": analyzed
-    }
+                statuses[metric] = "available"
+        except HTTPException as exc:
+            metrics[metric] = None
+            errors[metric] = exc.detail
+            detail = exc.detail if isinstance(exc.detail, dict) else {}
+            code = detail.get("meta_code")
+            if exc.status_code == 429 or code == 4 or exc.status_code >= 500:
+                statuses[metric] = "temporarily_unavailable"
+                # A shared app rate limit applies to all remaining metrics; don't compound it.
+                if exc.status_code == 429 or code == 4:
+                    for remaining in metric_names[metric_names.index(metric) + 1:]:
+                        metrics[remaining] = None
+                        statuses[remaining] = "temporarily_unavailable"
+                        errors[remaining] = {"message": "Skipped because Meta rate-limited this request.", "meta_code": 4}
+                    break
+            elif code in (10, 200) or exc.status_code == 403:
+                statuses[metric] = "permission_required"
+            elif code == 100:
+                statuses[metric] = "not_supported"
+            else:
+                statuses[metric] = "temporarily_unavailable"
+    stored = post.get("platform_metrics") or {}
+    stored["insights"] = metrics
+    social_service.upsert_post({**post, "platform_metrics": stored})
+    return {"available": any(value is not None for value in metrics.values()), "platform": "instagram", "account_id": str(resolved["account"]["id"]), "media_id": str(media_id), "media_type": post.get("media_type"), "data": metrics, "statuses": statuses, "unavailable": errors, "api_version": settings.META_API_VERSION}
 
 
-@router.post("/import-dataset")
-def import_instagram_as_dataset():
-    """Imports Instagram media and comments into the core Big Data dataset registry."""
-    posts_res = get_instagram_media(use_stored_if_offline=True)
-    posts = posts_res.get("data", [])
-    if not posts:
-        raise HTTPException(status_code=404, detail="No Instagram posts found to import.")
-        
-    rows = []
-    for p in posts:
-        caption = p.get("caption") or p.get("text", "")
-        if caption.strip():
-            rows.append({
-                "id": p.get("id"),
-                "type": "Post",
-                "platform": "instagram",
-                "text": caption,
-                "created_time": p.get("created_time"),
-                "likes": p.get("likes_count", 0),
-                "comments": p.get("comments_count", 0)
-            })
-            
-            # Fetch and include comments if available
-            try:
-                comments = get_instagram_comments(p.get("id"))
-                for c in comments:
-                    c_text = c.get("message") or c.get("text", "")
-                    if c_text.strip():
-                        rows.append({
-                            "id": c.get("id"),
-                            "type": "Comment",
-                            "platform": "instagram",
-                            "text": c_text,
-                            "created_time": c.get("created_time"),
-                            "likes": c.get("like_count", 0),
-                            "comments": 0
-                        })
-            except Exception:
-                pass
-                
-    if not rows:
-        raise HTTPException(status_code=404, detail="No Instagram text records found to import.")
-        
-    df = pd.DataFrame(rows)
-    csv_bytes = df.to_csv(index=False).encode("utf-8")
-    
-    try:
-        entry = dataset_service.save_uploaded_csv(csv_bytes, "Instagram_Import.csv")
-        return {
-            "dataset_id": entry["dataset_id"],
-            "filename": entry["original_filename"],
-            "rows": entry["rows"],
-            "columns": entry["columns"],
-            "detected_mapping": entry["mapping"],
-            "message": "Instagram data successfully imported as a Big Data dataset."
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save Instagram dataset: {str(e)}")
+@router.get("/insights")
+def get_instagram_account_insights(refresh: bool = False):
+    """Request account insights from Meta using the configured version; expose unavailable metrics honestly."""
+    if refresh:
+        meta_graph.clear_cache()
+    resolved = _resolve_account()
+    requested = ("reach", "accounts_engaged", "total_interactions")
+    metrics: Dict[str, Any] = {}
+    unavailable: Dict[str, Any] = {}
+    for metric in requested:
+        try:
+            response = _graph(f"{resolved['account']['id']}/insights", resolved["token"], {"metric": metric, "period": "day"})
+            rows = response.get("data") or []
+            metrics[metric] = rows[0] if rows else None
+            if not rows:
+                unavailable[metric] = "Meta returned no values for this metric."
+        except HTTPException as exc:
+            if exc.status_code == 429:
+                raise
+            metrics[metric] = None
+            unavailable[metric] = exc.detail
+    return {"available": any(value is not None for value in metrics.values()), "account_id": str(resolved["account"]["id"]), "data": metrics, "unavailable": unavailable, "api_version": settings.META_API_VERSION, "message": "Metrics are returned only when supported by the account, token permissions, and configured Graph API version."}

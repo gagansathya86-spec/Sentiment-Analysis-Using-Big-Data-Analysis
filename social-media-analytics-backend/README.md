@@ -21,9 +21,10 @@ Positive / Negative / Neutral
 Analytics & Visualization APIs
 ```
 
-No external AI APIs are used anywhere. Sentiment classification is done
-entirely with **TF-IDF + Multinomial Naive Bayes** (scikit-learn), exactly
-as specified in the paper — never an LLM, VADER, TextBlob, or Transformer.
+No external AI APIs are used for sentiment classification. The prediction
+model is **TF-IDF + Multinomial Naive Bayes** (scikit-learn), not an LLM,
+VADER, TextBlob, or Transformer. Live Facebook Graph access separately
+requires a Facebook access token in `.env`.
 
 ## Project layout
 
@@ -61,16 +62,59 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 Open **http://localhost:8000/docs** for interactive Swagger UI, or
 **http://localhost:8000/redoc** for ReDoc.
 
-No API keys are needed anywhere — `.env.example` documents every setting
-and none of them are secrets.
+No key is needed for offline sentiment analysis. Live Facebook and HDFS
+integrations use backend-only secrets configured in `.env`.
+
+## Facebook token renewal and storage
+
+The Facebook connection uses a **User Access Token** to discover managed Pages
+through `/me/accounts`, then uses the returned **Page Access Token** for the
+selected Page. Page tokens are held only in backend memory and are reacquired
+after a restart or when the user token changes. Settings saves a replacement
+user token encrypted in SQLite; configure `FACEBOOK_TOKEN_ENCRYPTION_KEY`
+before saving. Generate a Fernet key once and keep the same value across
+restarts/backups:
+
+```powershell
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Put that output in the backend `.env` as `FACEBOOK_TOKEN_ENCRYPTION_KEY=...`.
+Never commit `.env` or share the key. When a token has expired or been revoked,
+Meta requires renewed user authorization; the backend stops retrying that
+token and Settings provides the reconnect/test flow. In Meta Graph API Explorer,
+select the existing Facebook app and create a fresh **User Access Token** with
+`pages_show_list`, `pages_read_engagement`, and `pages_read_user_content`.
+Paste it into **Settings → Meta Graph API Configuration**, save, then test the
+connection and confirm the target Page and permissions before syncing comments.
+`pages_read_user_content` may require Advanced Access/App Review for accounts
+outside the app's roles. A valid user token is not sufficient if the user lacks
+access to the target Page or the Page is not returned by `/me/accounts`.
+
+## Instagram Professional account
+
+Instagram uses the same encrypted Meta user token and discovers linked
+Business/Creator accounts through managed Facebook Pages. Optionally set
+`INSTAGRAM_PAGE_ID` and `INSTAGRAM_ACCOUNT_ID` in the backend `.env` to pin the
+linked account; leave them blank to discover an account from the managed/selected
+Page. The protected `/instagram/status` endpoint checks the current token's
+reported grants through `/me/permissions`. This is not a substitute for each
+Graph API operation: account eligibility, app review, and API-version support
+can still cause media, comment, or insights requests to be rejected.
+
+Select Instagram in the app's platform control, then use **Instagram Account →
+Sync Media** to store current Graph API media before analyzing captions or using
+the shared dashboards. The Facebook Login flow requires a linked Professional
+account and cannot access consumer accounts. Unsupported metrics remain
+unavailable instead of being recorded as zero.
 
 ## Local dev mode vs. real Hadoop/Spark
 
 `config.py` → `PROCESSING_ENGINE` controls this:
 
-- `PROCESSING_ENGINE=pandas` (default) — everything runs locally with
-  pandas standing in for HDFS storage + Spark processing. This is what
-  you want for development and for this take-home/demo environment.
+- `PROCESSING_ENGINE=pandas` (default) — dataset transformations run
+  locally with pandas and local files. This does not represent HDFS storage.
+  Facebook records use the separate `HDFS_WEBHDFS_URL` sink when configured.
 - `PROCESSING_ENGINE=spark` — switches to `SparkProcessingEngine`
   (`services/processing_engine.py`), which reads/writes through a real
   HDFS namenode (`HDFS_NAMENODE_URL`) and processes with PySpark
@@ -78,6 +122,9 @@ and none of them are secrets.
   cluster. Every other module in the codebase (dataset service, model
   service, analytics) talks only to the `ProcessingEngine` interface, so
   no other code changes are needed to move from dev to a real cluster.
+
+For application login and verified Facebook WebHDFS export/backfill setup,
+see the repository's `AUTH_HDFS_SETUP.md`.
 
 ## API walkthrough
 

@@ -10,3 +10,4 @@ data/processed/*
 !data/processed/.gitkeep
 data/trained_models/*
 !data/trained_models/.gitkeep
+data/.auth_secret_key

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Settings, CheckCircle, Play, AlertTriangle } from 'lucide-react';
 import { DatasetContext } from '../context/DatasetContext';
 import { preprocessDataset } from '../services/api';
+import { formatApiError } from '../utils/apiError';
 
 const Preprocessing = () => {
   const { datasetId, columnMapping } = useContext(DatasetContext);
@@ -44,7 +45,7 @@ const Preprocessing = () => {
       const res = await preprocessDataset(datasetId, requestBody);
       setResult(res.data);
     } catch (err) {
-      setError(err.response?.data?.detail || 'An error occurred during preprocessing.');
+      setError(formatApiError(err, 'An error occurred during preprocessing.'));
     } finally {
       setLoading(false);
     }

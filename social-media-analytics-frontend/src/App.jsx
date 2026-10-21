@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { DatasetProvider } from './context/DatasetContext';
+import { AuthProvider } from './context/AuthContext';
+import { PlatformProvider } from './context/PlatformContext';
 
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -22,6 +24,8 @@ import CrisisAlerts from './pages/CrisisAlerts';
 import Trends from './pages/Trends';
 import { SentimentDashboard } from './pages/SentimentDashboard';
 import Behavior from './pages/Behavior';
+import BestTimeToPost from './pages/BestTimeToPost';
+import AIInsights from './pages/AIInsights';
 
 // Models & Big Data
 import ModelEval from './pages/ModelEval';
@@ -33,11 +37,11 @@ import Preprocessing from './pages/Preprocessing';
 // Administration
 import Reports from './pages/Reports';
 import SettingsPage from './pages/SettingsPage';
+import Login from './pages/Login';
+import ProtectedRoute from './components/ProtectedRoute';
 
-function App() {
+function AuthenticatedApp() {
   return (
-    <DatasetProvider>
-      <Router>
         <Layout>
           <Routes>
             {/* Default Route */}
@@ -60,6 +64,8 @@ function App() {
             <Route path="/trends" element={<ErrorBoundary><Trends /></ErrorBoundary>} />
             <Route path="/sentiment-dashboard" element={<ErrorBoundary><SentimentDashboard /></ErrorBoundary>} />
             <Route path="/behavior" element={<ErrorBoundary><Behavior /></ErrorBoundary>} />
+            <Route path="/best-time-to-post" element={<ErrorBoundary><BestTimeToPost /></ErrorBoundary>} />
+            <Route path="/ai-insights" element={<ErrorBoundary><AIInsights /></ErrorBoundary>} />
 
             {/* Models & Big Data */}
             <Route path="/eval" element={<ErrorBoundary><ModelEval /></ErrorBoundary>} />
@@ -77,8 +83,23 @@ function App() {
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
         </Layout>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <DatasetProvider>
+      <PlatformProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={<ProtectedRoute><AuthenticatedApp /></ProtectedRoute>} />
+        </Routes>
       </Router>
-    </DatasetProvider>
+      </PlatformProvider>
+      </DatasetProvider>
+    </AuthProvider>
   );
 }
 

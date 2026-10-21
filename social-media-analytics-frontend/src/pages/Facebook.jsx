@@ -1,12 +1,16 @@
-import React, { useState, useMemo, useContext } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DatasetContext } from '../context/DatasetContext';
-import { BrainCircuit, MessageSquare as FbIcon, Loader2, RefreshCw, X, BarChart2, Database, TrendingUp, TrendingDown, Users } from 'lucide-react';
+import { BrainCircuit, MessageSquare as FbIcon, Loader2, RefreshCw, X, BarChart2, Database, TrendingUp, TrendingDown, Users, CheckCircle, AlertTriangle, Sparkles, Sliders } from 'lucide-react';
 import { 
   PieChart, Pie, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, BarChart, Bar
 } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { importFacebookAsDataset, analyzeFacebookPosts, analyzeFacebookPostComments, getFacebookPostInsights } from '../services/api';
+import { 
+  getFacebookStatus, getFacebookPages, selectFacebookPage, 
+  loadFacebookDemo, clearFacebookDemo, importFacebookAsDataset, 
+  analyzeFacebookPosts, analyzeFacebookPostComments, getFacebookPostInsights 
+} from '../services/api';
 import MetricCard from '../components/ui/MetricCard';
 import ChartCard from '../components/ui/ChartCard';
 import SentimentBadge from '../components/ui/SentimentBadge';
@@ -14,10 +18,13 @@ import DataTable from '../components/ui/DataTable';
 import EmptyState from '../components/ui/EmptyState';
 import SectionHeader from '../components/ui/SectionHeader';
 import { PageSkeleton } from '../components/ui/Skeleton';
+import { summarizeCommentSentiment } from '../utils/commentSentiment';
+import { formatApiError } from '../utils/apiError';
 
 const COLORS = {
   positive: 'var(--success)',
   negative: 'var(--error)',
+  neutral: 'var(--text-muted)',
   unknown: 'var(--text-muted)'
 };
 
@@ -34,17 +41,90 @@ const Facebook = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  const [errorDetails, setErrorDetails] = useState(null);
   
+  // Facebook Page Discovery State
+  const [pages, setPages] = useState([]);
+  const [selectedPageId, setSelectedPageId] = useState('');
+  const [selectedPageName, setSelectedPageName] = useState('');
+  const [testPageFound, setTestPageFound] = useState(false);
+  const [loadingPages, setLoadingPages] = useState(false);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [statusData, setStatusData] = useState(null);
+
   const [selectedPost, setSelectedPost] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState(null);
   
   const [commentsCache, setCommentsCache] = useState({});
   const [insightsCache, setInsightsCache] = useState({});
+  const [refreshingPerformance, setRefreshingPerformance] = useState(false);
 
   const navigate = useNavigate();
   const { setDatasetId, setFilename, setColumnMapping } = useContext(DatasetContext);
   const [importing, setImporting] = useState(false);
+
+  // Discover managed pages on mount
+  const fetchPagesAndStatus = async (refresh = false) => {
+    setLoadingPages(true);
+    setError(null);
+    setErrorDetails(null);
+    try {
+      const [pagesResult, statusResult] = await Promise.allSettled([
+        getFacebookPages(refresh).then(r => r.data),
+        getFacebookStatus(refresh).then(r => r.data)
+      ]);
+      const pagesRes = pagesResult.status === 'fulfilled' ? pagesResult.value : null;
+      const statusRes = statusResult.status === 'fulfilled' ? statusResult.value : null;
+      const failedResult = [statusResult, pagesResult].find(result => result.status === 'rejected');
+      if (failedResult) {
+        const requestError = failedResult.reason;
+        const detail = requestError?.response?.data?.detail;
+        setError(formatApiError(requestError, 'Could not reach the Facebook Graph API. Check the backend connection.'));
+        setErrorDetails({ status: 'connection_error' });
+      }
+
+      if (statusRes) {
+        setStatusData(statusRes);
+        if (!statusRes.connected && ['token_expired', 'token_invalid', 'permission_error'].includes(statusRes.status)) {
+          setError(formatApiError(statusRes.error_message, 'Meta Access Token has expired.'));
+          setErrorDetails(statusRes);
+        }
+      }
+
+      if (pagesRes) {
+        if (pagesRes.pages && pagesRes.pages.length > 0) {
+          setPages(pagesRes.pages);
+          setSelectedPageId(pagesRes.selected_page_id || pagesRes.pages[0].id);
+          setSelectedPageName(pagesRes.selected_page_name || pagesRes.pages[0].name);
+          setTestPageFound(pagesRes.test_page_found);
+        } else if (!pagesRes.connected && pagesRes.error_message) {
+          setError(formatApiError(pagesRes.error_message, 'Facebook Pages could not be loaded.'));
+          setErrorDetails(pagesRes);
+        }
+      }
+    } catch (err) {
+      setError(formatApiError(err, 'Failed to discover Facebook Pages.'));
+    } finally {
+      setLoadingPages(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPagesAndStatus();
+  }, []);
+
+  const handleSelectPage = async (pageId) => {
+    const pageObj = pages.find(p => p.id === pageId);
+    const pName = pageObj ? pageObj.name : '';
+    setSelectedPageId(pageId);
+    setSelectedPageName(pName);
+    try {
+      await selectFacebookPage(pageId, pName);
+    } catch (e) {
+      console.warn("Could not save selected page to backend state:", e);
+    }
+  };
 
   const handleImportToWorkflow = async () => {
     setImporting(true);
@@ -56,7 +136,7 @@ const Facebook = () => {
       setColumnMapping(response.data.detected_mapping);
       navigate('/explorer');
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Failed to import dataset');
+      setError(formatApiError(err, 'Failed to import dataset'));
     } finally {
       setImporting(false);
     }
@@ -65,41 +145,147 @@ const Facebook = () => {
   const handleAnalyze = async () => {
     setLoading(true);
     setError(null);
-    setResult(null);
+    setErrorDetails(null);
     setSelectedPost(null);
     setCommentsCache({});
     setInsightsCache({});
     try {
-      const response = await analyzeFacebookPosts();
+      const response = await analyzeFacebookPosts(selectedPageId);
       setResult(response.data);
+      setIsDemoMode(false);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Failed to analyze posts');
+      const detail = err.response?.data?.detail;
+      setError(formatApiError(err, 'Failed to analyze posts'));
+      if (err.response?.status === 190 || (typeof detail === 'string' && detail.includes("Token Expired")) || (typeof detail?.message === 'string' && detail.message.includes("Token Expired"))) {
+        setErrorDetails({
+          status: 'token_expired',
+          action_required: "Open Settings, replace the Facebook User Access Token with a newly authorized token for the existing Meta app, then test the connection."
+        });
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleLoadDemo = async () => {
+    setLoading(true);
+    setError(null);
+    setErrorDetails(null);
+    try {
+      await loadFacebookDemo();
+      setIsDemoMode(true);
+      // Fetch the sample posts using cached mode
+      const res = await analyzeFacebookPosts(selectedPageId).catch(() => null);
+      if (res && res.data) {
+        setResult(res.data);
+      } else {
+        // Fallback: fetch posts directly
+        const postsRes = await getFacebookPosts(selectedPageId, true);
+        setResult({
+          page_id: selectedPageId || 'demo_page',
+          page_name: 'Social Media Sentiment Test Page (Demo)',
+          summary: {
+            total_posts_fetched: postsRes.data.length,
+            posts_analyzed: postsRes.data.length,
+            positive_count: postsRes.data.filter(p => p.sentiment === 'positive').length || 2,
+            negative_count: postsRes.data.filter(p => p.sentiment === 'negative').length || 1,
+            positive_percentage: 66.7,
+            negative_percentage: 33.3
+          },
+          analyzed_posts: postsRes.data.map(p => ({
+            id: p.id,
+            message: p.message,
+            created_time: p.created_time,
+            comments_count: p.comments_count,
+            likes_count: p.likes_count,
+            sentiment: p.sentiment || 'positive',
+            is_sample: 1
+          }))
+        });
+      }
+    } catch (err) {
+      setError(formatApiError(err, 'Failed to load demo data.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearDemo = async () => {
+    try {
+      await clearFacebookDemo();
+      setIsDemoMode(false);
+      setResult(null);
+      setError(null);
+    } catch (err) {
+      console.warn("Failed to clear demo data:", err);
+    }
+  };
+
   const handleViewDetails = async (post) => {
+    if (detailsLoading) return;
     setSelectedPost(post);
     setDetailsError(null);
     
-    if (!commentsCache[post.id] || !insightsCache[post.id]) {
-      setDetailsLoading(true);
-      try {
-        const [commentsRes, insightsRes] = await Promise.all([
-          analyzeFacebookPostComments(post.id).then(res => res.data).catch(e => null),
-          getFacebookPostInsights(post.id).then(res => res.data).catch(e => null)
-        ]);
-        
-        if (commentsRes) setCommentsCache(prev => ({ ...prev, [post.id]: commentsRes }));
-        if (insightsRes) setInsightsCache(prev => ({ ...prev, [post.id]: insightsRes }));
-      } catch (err) {
-        setDetailsError(err.message || 'Failed to fetch details');
-      } finally {
-        setDetailsLoading(false);
-      }
+    setDetailsLoading(true);
+    const requests = [analyzeFacebookPostComments(post.id)];
+    if (!insightsCache[post.id]) requests.push(getFacebookPostInsights(post.id));
+    const [commentsResult, insightsResult] = await Promise.allSettled(requests);
+    if (commentsResult.status === 'fulfilled') setCommentsCache(prev => ({ ...prev, [post.id]: commentsResult.value.data }));
+    else setDetailsError(formatApiError(commentsResult.reason, 'Could not retrieve Facebook comments.'));
+    if (insightsResult?.status === 'fulfilled') setInsightsCache(prev => ({ ...prev, [post.id]: insightsResult.value.data }));
+    else if (insightsResult?.status === 'rejected') {
+      const reason = formatApiError(insightsResult.reason, 'Could not retrieve Facebook performance metrics.');
+      setInsightsCache(prev => ({
+        ...prev,
+        [post.id]: {
+          available: false,
+          metrics: Object.fromEntries(['media_views', 'unique_viewers', 'reactions', 'comments', 'shares'].map(key => [key, {
+            label: ({ media_views: 'Media views', unique_viewers: 'Unique viewers', reactions: 'Reactions', comments: 'Comments', shares: 'Shares' })[key],
+            available: false, value: null, status: 'request_error', reason
+          }]))
+        }
+      }));
+    }
+    setDetailsLoading(false);
+  };
+
+  const refreshPostPerformance = async (postId) => {
+    setRefreshingPerformance(true);
+    setDetailsError(null);
+    try {
+      const response = await getFacebookPostInsights(postId, true);
+      setInsightsCache(prev => ({ ...prev, [postId]: response.data }));
+    } catch (requestError) {
+      setDetailsError(formatApiError(requestError, 'Could not refresh Facebook performance metrics.'));
+    } finally {
+      setRefreshingPerformance(false);
     }
   };
+
+  const handleSyncComments = async (postId, force = true, offset = 0) => {
+    setDetailsError(null);
+    if (offset === 0) setDetailsLoading(true);
+    try {
+      const response = await analyzeFacebookPostComments(postId, { force_sync: force, offset, limit: 100 });
+      setCommentsCache(prev => {
+        const current = prev[postId];
+        const incoming = response.data.analyzed_comments || [];
+        return { ...prev, [postId]: { ...response.data, analyzed_comments: offset > 0 ? [...(current?.analyzed_comments || []), ...incoming] : incoming } };
+      });
+    } catch (err) {
+      setDetailsError(formatApiError(err, 'Could not sync Facebook comments.'));
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedPost?.id) return undefined;
+    const timer = window.setInterval(() => {
+      handleSyncComments(selectedPost.id, false, 0);
+    }, 15 * 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, [selectedPost?.id]);
 
   const { dashboardData, dashboardTrendArray, commentTrendArray, timeOfDayArray } = useMemo(() => {
     let data = {
@@ -109,6 +295,7 @@ const Facebook = () => {
       negativePosts: 0,
       positiveComments: 0,
       negativeComments: 0,
+      neutralComments: 0,
       sentimentData: [],
       commentSentimentData: []
     };
@@ -149,6 +336,7 @@ const Facebook = () => {
         if (cacheItem.summary) {
           data.positiveComments += cacheItem.summary.positive_count;
           data.negativeComments += cacheItem.summary.negative_count;
+          data.neutralComments += cacheItem.summary.neutral_count || 0;
         }
         
         if (cacheItem.analyzed_comments) {
@@ -171,7 +359,8 @@ const Facebook = () => {
       
       data.commentSentimentData = [
         { name: 'positive', value: data.positiveComments },
-        { name: 'negative', value: data.negativeComments }
+        { name: 'negative', value: data.negativeComments },
+        { name: 'neutral', value: data.neutralComments }
       ].filter(d => d.value > 0);
     }
     
@@ -191,7 +380,19 @@ const Facebook = () => {
     if (!selectedPost) return null;
     const post = selectedPost;
     const commentsData = commentsCache[post.id];
+    const sentimentSummary = summarizeCommentSentiment(commentsData?.summary);
     const insightsData = insightsCache[post.id];
+    const performanceMetrics = insightsData?.metrics || {};
+    const performanceValue = (key) => {
+      const metric = performanceMetrics[key];
+      return metric?.available && metric.value !== null && metric.value !== undefined ? metric.value : 'Unavailable';
+    };
+    const performanceSubtitle = (key) => {
+      const metric = performanceMetrics[key];
+      return metric?.available
+        ? (metric.period === 'lifetime' ? 'Lifetime · Meta Graph API' : 'Returned by Meta Graph API')
+        : (metric?.reason || 'Meta did not return this metric.');
+    };
     
     let comparisonInsight = "";
     let audienceReactionState = "Mixed";
@@ -200,17 +401,21 @@ const Facebook = () => {
       const analyzed = commentsData.summary.comments_analyzed;
       const pos = commentsData.summary.positive_count;
       const neg = commentsData.summary.negative_count;
+      const neutral = commentsData.summary.neutral_count || 0;
       const pSentiment = post.sentiment;
       
       if (retrieved === 0) {
         audienceReactionState = "No Comment Data";
         comparisonInsight = "Facebook API restrictions prevent fetching these comments.";
-      } else if (pos === 0 && neg === 0) {
+      } else if (sentimentSummary.comments_analyzed === 0) {
         audienceReactionState = "No Analyzable Comments";
         comparisonInsight = "Retrieved comments have no discernible sentiment.";
-      } else if (pos === neg) {
+      } else if (commentsData.summary.overall_sentiment === 'mixed') {
         audienceReactionState = "Mixed";
-        comparisonInsight = "Comments contain an equal mix of positive and negative sentiment.";
+        comparisonInsight = `Analyzed comments have a mixed distribution (${pos} positive, ${neg} negative, ${neutral} neutral).`;
+      } else if (commentsData.summary.overall_sentiment === 'neutral') {
+        audienceReactionState = 'Neutral';
+        comparisonInsight = `Neutral comments are the largest group (${neutral} of ${sentimentSummary.comments_analyzed} analyzed).`;
       } else {
         if (pSentiment === 'positive') {
             if (pos > neg) {
@@ -240,11 +445,7 @@ const Facebook = () => {
       }
     }
     
-    const commentChartData = commentsData ? [
-      { name: 'positive', value: commentsData.summary.positive_count },
-      { name: 'negative', value: commentsData.summary.negative_count },
-      { name: 'unknown', value: commentsData.summary.unknown_count || 0 }
-    ].filter(d => d.value > 0) : [];
+    const commentChartData = sentimentSummary.chartData;
 
     const commentColumns = [
       { header: 'Date', cell: row => new Date(row.created_time).toLocaleString(), width: '150px' },
@@ -303,13 +504,12 @@ const Facebook = () => {
                 <p style={{ fontSize: '1.125rem', lineHeight: 1.6 }}>{post.message}</p>
               </motion.div>
 
-              <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="grid-2">
-                <MetricCard 
-                  title="Post Performance"
-                  value={insightsData?.available ? (insightsData.impressions || 0) : 'N/A'}
-                  subtitle={insightsData?.available ? `Reach: ${insightsData.reach}` : (insightsData?.reason || 'API limitations.')}
-                  icon={Users}
-                />
+              <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="grid-3">
+                <MetricCard title="Media Views" value={performanceValue('media_views')} subtitle={performanceSubtitle('media_views')} icon={BarChart2} />
+                <MetricCard title="Unique Viewers" value={performanceValue('unique_viewers')} subtitle={performanceSubtitle('unique_viewers')} icon={Users} />
+                <MetricCard title="Reactions" value={performanceValue('reactions')} subtitle={performanceSubtitle('reactions')} icon={FbIcon} />
+                <MetricCard title="Post Comments" value={performanceValue('comments')} subtitle={performanceSubtitle('comments')} icon={FbIcon} />
+                <MetricCard title="Shares" value={performanceValue('shares')} subtitle={performanceSubtitle('shares')} icon={Users} />
                 {commentsData?.summary ? (
                   <MetricCard 
                     title="Audience Reaction"
@@ -322,16 +522,23 @@ const Facebook = () => {
                   <MetricCard title="Audience Reaction" value="N/A" subtitle="No comments analyzed" icon={BrainCircuit} />
                 )}
               </motion.div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-0.75rem' }}>
+                <button onClick={() => refreshPostPerformance(post.id)} className="btn-secondary" disabled={refreshingPerformance}>
+                  <RefreshCw size={14} /> {refreshingPerformance ? 'Refreshing…' : 'Refresh performance'}
+                </button>
+              </div>
 
-              {commentsData && commentsData.summary && (
+                  {detailsError && <div role="alert" className="card" style={{ borderColor: 'var(--error)', color: 'var(--error)' }}>{detailsError}</div>}
+                  {commentsData && commentsData.summary && (
                 <>
                   <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="grid-3">
                     <MetricCard title="Total Comments" value={post.comments_count || 0} />
                     <MetricCard title="Retrieved" value={commentsData.summary.total_comments} />
-                    <MetricCard title="Analyzed" value={commentsData.summary.comments_analyzed} />
-                    <MetricCard title="Positive" value={commentsData.summary.positive_count} color={COLORS.positive} />
-                    <MetricCard title="Negative" value={commentsData.summary.negative_count} color={COLORS.negative} />
-                    <MetricCard title="Unknown" value={commentsData.summary.unknown_count || 0} color={COLORS.unknown} />
+                    <MetricCard title="Analyzed" value={sentimentSummary.comments_analyzed} />
+                    {sentimentSummary.cards.map((card) => (
+                      <MetricCard key={card.name} title={card.title} value={card.value} color={COLORS[card.name]} />
+                    ))}
+                    <MetricCard title="Unanalyzed" value={sentimentSummary.unanalyzed_count} color={COLORS.unknown} />
                   </motion.div>
 
                   <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }}>
@@ -339,11 +546,23 @@ const Facebook = () => {
                     {commentChartData.length > 0 ? (
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie data={commentChartData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" label stroke="none">
+                          <Pie
+                            data={commentChartData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={50}
+                            outerRadius={80}
+                            dataKey="value"
+                            label={({ name, value, percent }) => `${name[0].toUpperCase()}${name.slice(1)} ${value} (${Math.round(percent * 100)}%)`}
+                            stroke="none"
+                          >
                             {commentChartData.map((e, i) => <Cell key={i} fill={COLORS[e.name.toLowerCase()]} />)}
                           </Pie>
-                          <RechartsTooltip {...CHART_STYLES.tooltip} />
-                          <Legend style={{ textTransform: 'capitalize' }} />
+                          <RechartsTooltip
+                            {...CHART_STYLES.tooltip}
+                            formatter={(value, _name, item) => [`${value} comments (${item.payload.percentage}%)`, item.payload.label]}
+                          />
+                          <Legend formatter={(name) => `${name[0].toUpperCase()}${name.slice(1)}`} />
                         </PieChart>
                       </ResponsiveContainer>
                     ) : (
@@ -354,14 +573,20 @@ const Facebook = () => {
 
                   <motion.div variants={{ hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0 } }} className="card" style={{ marginBottom: 0, padding: 0, overflow: 'hidden' }}>
                     <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-                      <h3 style={{ margin: 0, fontSize: '1.125rem' }}>Analyzed Comments</h3>
+                      <h3 style={{ margin: 0, fontSize: '1.125rem' }}>Facebook Comments · {commentsData.summary.overall_sentiment || 'unknown'} audience sentiment</h3>
+                      <p style={{ margin: '0.5rem 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Post sentiment ({post.sentiment}) is separate from comment sentiment. Last sync: {commentsData.sync?.last_synced_at ? new Date(commentsData.sync.last_synced_at).toLocaleString() : 'not available'}.</p>
+                      {(commentsData.sync?.error || commentsData.sync?.warning) && <p role="status" style={{ margin: '0.5rem 0 0', color: 'var(--warning)', fontSize: '0.85rem' }}>{commentsData.sync.error || commentsData.sync.warning} Showing saved comments where available.</p>}
+                      <button onClick={() => handleSyncComments(post.id, true, 0)} disabled={detailsLoading} className="btn-secondary" style={{ marginTop: '0.75rem' }}>
+                        {detailsLoading ? <Loader2 size={15} className="spin" /> : <RefreshCw size={15} />} Sync comments
+                      </button>
                     </div>
                     <DataTable 
                       columns={commentColumns} 
                       data={commentsData.analyzed_comments} 
                       keyField="id" 
-                      emptyMessage={post.comments_count === 0 ? "No comments on this post." : "Comments could not be retrieved due to Facebook API permissions."}
+                      emptyMessage={commentsData.summary.total_comments === 0 ? "No comments were returned by Facebook for this post." : "Facebook returned comments, but none had visible text to display."}
                     />
+                    {commentsData.has_more && <button className="btn-secondary" style={{ margin: '1rem' }} onClick={() => handleSyncComments(post.id, false, commentsData.offset + commentsData.analyzed_comments.length)} disabled={detailsLoading}>Load more comments</button>}
                   </motion.div>
                 </>
               )}
@@ -386,7 +611,7 @@ const Facebook = () => {
       </div>
     ), width: '150px' },
     { header: 'Actions', cell: row => (
-      <button onClick={() => handleViewDetails(row)} className="btn-primary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem' }}>
+      <button onClick={() => handleViewDetails(row)} disabled={detailsLoading} className="btn-primary" style={{ padding: '0.4rem 0.75rem', fontSize: '0.75rem' }}>
         View Details
       </button>
     ), align: 'right', width: '120px' }
@@ -396,34 +621,161 @@ const Facebook = () => {
     <div>
       <SectionHeader 
         title="Facebook Analytics" 
-        subtitle="Analyze your live Facebook posts, audience reactions, and engagement."
+        subtitle="Live Facebook Graph API integration for your managed pages and audience reactions."
         action={
-          <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {isDemoMode ? (
+              <button onClick={handleClearDemo} className="btn-secondary" style={{ borderColor: 'var(--warning)', color: 'var(--warning)' }}>
+                Clear Demo Data
+              </button>
+            ) : (
+              <button onClick={handleLoadDemo} disabled={loading} className="btn-secondary" title="Explicitly test dashboard with sample demonstration records">
+                <Sparkles size={16} />
+                Load Demo Data
+              </button>
+            )}
             <button onClick={handleImportToWorkflow} disabled={loading || importing || !result} className="btn-secondary">
               {importing ? <span className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <Database size={16} />}
               {importing ? 'Exporting...' : 'Export to Workflow'}
             </button>
             <button onClick={handleAnalyze} disabled={loading || importing} className="btn-primary">
               {loading ? <span className="loading-spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> : <FbIcon size={16} />}
-              {loading ? 'Analyzing...' : (result ? 'Refresh Analytics' : 'Analyze My Posts')}
+              {loading ? 'Analyzing...' : (result ? 'Refresh Page Analytics' : 'Analyze Page Posts')}
             </button>
-          </>
+          </div>
         }
       />
 
+      {/* Facebook Page Discovery & Selection Bar */}
+      <div className="card" style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem', backgroundColor: 'var(--card-bg)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: '280px' }}>
+            <FbIcon size={20} color="var(--primary)" />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Connected Facebook Page:
+              </div>
+              {pages.length > 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem' }}>
+                  <select 
+                    value={selectedPageId} 
+                    onChange={e => handleSelectPage(e.target.value)}
+                    style={{
+                      padding: '0.4rem 0.75rem',
+                      borderRadius: 'var(--radius-sm)',
+                      backgroundColor: 'var(--bg-dark)',
+                      color: 'var(--text-main)',
+                      border: '1px solid var(--border-color)',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      minWidth: '240px'
+                    }}
+                  >
+                    {pages.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.is_test_page ? '★ (Test Page)' : ''} ({p.id})
+                      </option>
+                    ))}
+                  </select>
+                  {testPageFound && (
+                    <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', backgroundColor: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', borderRadius: '4px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <CheckCircle size={13} /> Social Media Sentiment Test Page Verified
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', marginTop: '0.15rem' }}>
+                  {loadingPages ? 'Discovering pages via /me/accounts...' : (selectedPageName || 'Social Media Sentiment Test Page (Configured via .env)')}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <button onClick={() => fetchPagesAndStatus(true)} disabled={loadingPages} className="btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>
+              <RefreshCw size={13} className={loadingPages ? 'spin' : ''} />
+              {loadingPages ? 'Verifying...' : 'Check Access'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Demo Mode Active Banner */}
+      {isDemoMode && (
+        <div style={{ 
+          padding: '0.85rem 1.25rem', 
+          backgroundColor: 'rgba(234, 179, 8, 0.1)', 
+          border: '1px solid rgba(234, 179, 8, 0.3)', 
+          borderRadius: 'var(--radius)', 
+          marginBottom: '1.5rem', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '0.75rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: 'var(--warning)' }}>
+            <Sparkles size={18} />
+            <div>
+              <strong style={{ fontSize: '0.88rem' }}>Demo Mode Active:</strong>
+              <span style={{ fontSize: '0.82rem', marginLeft: '0.35rem', color: 'var(--text-main)' }}>
+                Displaying synthetic demonstration records for evaluation. Live Facebook data is isolated.
+              </span>
+            </div>
+          </div>
+          <button onClick={handleClearDemo} className="btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', borderColor: 'var(--warning)', color: 'var(--warning)' }}>
+            Switch to Live Facebook Data
+          </button>
+        </div>
+      )}
+
+      {/* Error / Token Diagnostic Banner */}
       {error && (
-        <div style={{ padding: '1rem', backgroundColor: 'var(--error-bg)', color: 'var(--error)', borderRadius: 'var(--radius)', marginBottom: '2rem', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-          <strong>Error: </strong> {error}
+        <div style={{ 
+          padding: '1.25rem', 
+          backgroundColor: 'rgba(239, 68, 68, 0.08)', 
+          color: 'var(--text-main)', 
+          borderRadius: 'var(--radius)', 
+          marginBottom: '2rem', 
+          border: '1px solid rgba(239, 68, 68, 0.25)' 
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+            <AlertTriangle size={22} color="var(--error)" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, color: 'var(--error)', fontSize: '0.95rem', marginBottom: '0.35rem' }}>
+                Facebook Graph API Notice
+              </div>
+              <div style={{ fontSize: '0.86rem', color: 'var(--text-main)', marginBottom: '0.6rem', lineHeight: '1.4' }}>
+                {error}
+              </div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem', lineHeight: '1.4' }}>
+                <strong>Required Meta Permissions:</strong> <code>pages_show_list</code>, <code>pages_read_engagement</code>, and <code>pages_read_user_content</code> for reading Page comments.
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button onClick={() => navigate('/settings')} className="btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>
+                  Update Facebook Token in Settings
+                </button>
+                <button onClick={handleLoadDemo} className="btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>
+                  <Sparkles size={14} />
+                  Load Demo Data to Test Features
+                </button>
+                <button onClick={fetchPagesAndStatus} className="btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem' }}>
+                  Retry Connection
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {!result && !loading && !error && (
         <EmptyState 
           icon={FbIcon} 
-          title="No Data Fetched" 
-          description="Click the Analyze button above to fetch and run machine learning on your latest Facebook posts." 
+          title="No Posts Fetched Yet" 
+          description="Click 'Analyze Page Posts' to fetch and run machine learning sentiment analysis on your latest Facebook posts, or click 'Load Demo Data' to preview with sample records." 
         />
       )}
+
 
       {result && (
         <>
@@ -437,6 +789,7 @@ const Facebook = () => {
             <MetricCard title="Total Comments (All Posts)" value={dashboardData.totalComments} icon={Users} />
             <MetricCard title="Analyzed Pos. Comments" value={dashboardData.positiveComments} color={COLORS.positive} icon={TrendingUp} />
             <MetricCard title="Analyzed Neg. Comments" value={dashboardData.negativeComments} color={COLORS.negative} icon={TrendingDown} />
+            <MetricCard title="Analyzed Neutral Comments" value={dashboardData.neutralComments} color={COLORS.neutral} icon={BrainCircuit} />
           </div>
 
           <div className="grid-2" style={{ marginBottom: '2rem' }}>

@@ -4,11 +4,11 @@ import { motion } from 'framer-motion';
 import { 
   BrainCircuit, LayoutDashboard, Layers, MessageSquare, 
   Upload, Sparkles, Heart, Zap, AlertTriangle, 
-  TrendingUp, PieChart, LineChart, CheckCircle, Database, 
-  Map, Settings, FileText, Sliders 
+  TrendingUp, PieChart, LineChart, CheckCircle, Database,
+  Map, Settings, FileText, Sliders, CalendarDays, Lightbulb
 } from 'lucide-react';
-import { InstagramIcon as Instagram } from './BrandIcons';
 import { DatasetContext } from '../context/DatasetContext';
+import { IgIcon } from './BrandIcons';
 
 const NavItem = ({ to, icon: Icon, label, badge = null }) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -99,7 +99,7 @@ const Sidebar = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-main)' }}>
           <BrainCircuit size={24} color="var(--primary)" />
           <span style={{ fontSize: '1.1rem', fontWeight: 700, letterSpacing: '-0.025em' }}>
-            Nexus<span style={{ color: 'var(--primary)' }}>Intel</span>
+            FB <span style={{ color: 'var(--primary)' }}>Sentiments</span>
           </span>
           <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '4px', fontWeight: 600 }}>
             v2.0
@@ -115,7 +115,7 @@ const Sidebar = () => {
 
         <NavGroup title="Data Sources">
           <NavItem to="/facebook" icon={MessageSquare} label="Facebook Graph" />
-          <NavItem to="/instagram" icon={Instagram} label="Instagram Business" badge="New" />
+          <NavItem to="/instagram" icon={IgIcon} label="Instagram Graph" />
           <NavItem to="/upload" icon={Upload} label="Import & Datasets" />
         </NavGroup>
 
@@ -127,6 +127,8 @@ const Sidebar = () => {
           <NavItem to="/trends" icon={TrendingUp} label="Trends & Keywords" />
           <NavItem to="/sentiment-dashboard" icon={PieChart} label="Sentiment Deep-Dive" />
           <NavItem to="/behavior" icon={LineChart} label="User Behavior Mining" />
+          <NavItem to="/best-time-to-post" icon={CalendarDays} label="Best Time to Post" />
+          <NavItem to="/ai-insights" icon={Lightbulb} label="AI Insights" />
         </NavGroup>
 
         <NavGroup title="Models & Big Data">

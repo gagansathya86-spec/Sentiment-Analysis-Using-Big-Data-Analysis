@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  TrendingUp, Hash, MessageSquare, RefreshCw, 
-  Search, ArrowUpRight, BarChart2, Layers 
+  TrendingUp, Hash, RefreshCw, ArrowUpRight, Layers
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, 
@@ -14,6 +13,7 @@ import ChartCard from '../components/ui/ChartCard';
 import SentimentBadge from '../components/ui/SentimentBadge';
 import SectionHeader from '../components/ui/SectionHeader';
 import EmptyState from '../components/ui/EmptyState';
+import { usePlatform } from '../context/PlatformContext';
 
 const CHART_STYLES = {
   grid: { stroke: 'var(--chart-grid)', strokeDasharray: '3 3', vertical: false },
@@ -24,18 +24,22 @@ const CHART_STYLES = {
 };
 
 export const Trends = () => {
-  const [platform, setPlatform] = useState('all');
+  const { platform, setPlatform } = usePlatform();
+  const [periodDays, setPeriodDays] = useState(7);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [trends, setTrends] = useState(null);
   const [keywordSearch, setKeywordSearch] = useState('');
 
   const fetchTrends = async () => {
     setLoading(true);
+    setLoadError('');
     try {
-      const res = await getTrendDiscovery(platform, 25);
+      const res = await getTrendDiscovery(platform, 25, periodDays);
       setTrends(res.data);
     } catch (err) {
       console.error(err);
+      setLoadError('Could not load platform trends. Check the backend connection and retry.');
     } finally {
       setLoading(false);
     }
@@ -43,7 +47,7 @@ export const Trends = () => {
 
   useEffect(() => {
     fetchTrends();
-  }, [platform]);
+  }, [platform, periodDays]);
 
   const filteredKeywords = trends?.top_keywords?.filter(k => 
     k.keyword.toLowerCase().includes(keywordSearch.toLowerCase())
@@ -55,7 +59,7 @@ export const Trends = () => {
         <div>
           <SectionHeader 
             title="Keyword & Trend Discovery" 
-            subtitle="Topic frequency mining, polarity association, hashtag discovery, and emerging conversational velocity across channels."
+            subtitle={`${platform === 'instagram' ? 'Instagram' : 'Facebook'} topic frequency, sentiment over time, hashtag discovery, and timestamp-based emerging topics.`}
           />
         </div>
 
@@ -65,14 +69,49 @@ export const Trends = () => {
             onChange={(e) => setPlatform(e.target.value)}
             style={{ fontSize: '0.85rem' }}
           >
-            <option value="all">All Sources</option>
             <option value="facebook">Facebook Only</option>
             <option value="instagram">Instagram Only</option>
+            <option value="instagram">Instagram Only</option>
+          </select>
+          <select value={periodDays} onChange={(e) => setPeriodDays(Number(e.target.value))} style={{ fontSize: '0.85rem' }} aria-label="Trend comparison period">
+            <option value={7}>7-day comparison</option>
+            <option value={14}>14-day comparison</option>
+            <option value={30}>30-day comparison</option>
           </select>
           <button className="btn-secondary" onClick={fetchTrends} disabled={loading}>
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
         </div>
+      </div>
+
+      {loadError && <div role="alert" style={{ color: 'var(--error)', marginBottom: '1rem' }}>{loadError}</div>}
+
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h3 style={{ margin: '0 0 0.35rem' }}>Sentiment period comparison</h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0 0 1rem' }}>
+          Consecutive windows ending at the latest timestamp in stored {platform === 'instagram' ? 'Instagram' : 'Facebook'} data. This is a data-relative comparison, not a claim about today.
+        </p>
+        {trends?.period_comparison?.available ? (
+          <>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem', fontSize: '0.85rem' }}>
+              <span>Current negative: <strong>{trends.period_comparison.current_period.negative_percent}%</strong> ({trends.period_comparison.current_period.total} items)</span>
+              <span>Previous negative: <strong>{trends.period_comparison.previous_period.negative_percent}%</strong> ({trends.period_comparison.previous_period.total} items)</span>
+              <span>Change: <strong>{trends.period_comparison.negative_change_percentage_points > 0 ? '+' : ''}{trends.period_comparison.negative_change_percentage_points} percentage points</strong></span>
+            </div>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={trends.sentiment_over_time}>
+                <CartesianGrid {...CHART_STYLES.grid} />
+                <XAxis dataKey="date" {...CHART_STYLES.axis} />
+                <YAxis {...CHART_STYLES.axis} />
+                <RechartsTooltip contentStyle={CHART_STYLES.tooltip.contentStyle} />
+                <Legend />
+                <Bar dataKey="positive" stackId="sentiment" fill="var(--success)" />
+                <Bar dataKey="negative" stackId="sentiment" fill="var(--error)" />
+                <Bar dataKey="neutral" stackId="sentiment" fill="var(--text-muted)" />
+              </BarChart>
+            </ResponsiveContainer>
+          </>
+        ) : <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{trends?.period_comparison?.reason || 'Loading period comparison…'}</div>}
       </div>
 
       {/* KPI Cards */}
@@ -147,7 +186,7 @@ export const Trends = () => {
         <div className="card">
           <h3 style={{ margin: '0 0 0.5rem 0' }}>Accelerating & Emerging Topics</h3>
           <p style={{ margin: '0 0 1rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            Terms exhibiting highest growth velocity comparing second half to first half of dataset.
+            Repeated keyword occurrences compared across consecutive seven-day UTC windows.
           </p>
 
           {trends?.emerging_topics && trends.emerging_topics.length > 0 ? (
@@ -179,7 +218,7 @@ export const Trends = () => {
             </div>
           ) : (
             <div style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              Requires larger chronological dataset to calculate acceleration velocity.
+              {trends?.emerging_topics_reason || 'Emerging-topic velocity is unavailable without sufficient timestamped records in both windows.'}
             </div>
           )}
         </div>
@@ -187,7 +226,7 @@ export const Trends = () => {
         <div className="card">
           <h3 style={{ margin: '0 0 0.5rem 0' }}>Hashtag Discovery Cloud</h3>
           <p style={{ margin: '0 0 1rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            Categorical hashtags detected across Instagram and Facebook posts.
+            Hashtags detected across stored {platform === 'instagram' ? 'Instagram' : 'Facebook'} posts.
           </p>
 
           {trends?.top_hashtags && trends.top_hashtags.length > 0 ? (
@@ -217,30 +256,17 @@ export const Trends = () => {
         </div>
       </div>
 
-      {/* Cross-Platform Comparison Table */}
-      {platform === 'all' && trends?.platform_comparison && (
+      {/* Selected platform keyword summary */}
+      {trends?.platform_comparison && (
         <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <h3 style={{ margin: '0 0 1rem 0' }}>Cross-Platform Keyword Fingerprints</h3>
-          <div className="grid-2">
+          <h3 style={{ margin: '0 0 1rem 0' }}>{platform === 'instagram' ? 'Instagram' : 'Facebook'} Keyword Fingerprints</h3>
+          <div>
             <div>
               <div style={{ fontWeight: 600, color: '#1877f2', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-                Facebook Distinctive Keywords:
+                {platform === 'instagram' ? 'Instagram' : 'Facebook'} Frequent Keywords:
               </div>
               <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                {trends.platform_comparison.facebook_top_keywords?.map((k, i) => (
-                  <span key={i} className="badge badge-neutral" style={{ padding: '0.3rem 0.6rem' }}>
-                    {k.keyword} ({k.count})
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <div style={{ fontWeight: 600, color: '#e1306c', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-                Instagram Distinctive Keywords:
-              </div>
-              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                {trends.platform_comparison.instagram_top_keywords?.map((k, i) => (
+                {trends.platform_comparison[`${platform}_top_keywords`]?.map((k, i) => (
                   <span key={i} className="badge badge-neutral" style={{ padding: '0.3rem 0.6rem' }}>
                     {k.keyword} ({k.count})
                   </span>

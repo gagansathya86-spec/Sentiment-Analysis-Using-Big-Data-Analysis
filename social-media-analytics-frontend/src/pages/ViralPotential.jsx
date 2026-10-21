@@ -1,20 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Zap, Award, AlertCircle, ArrowUpRight, CheckCircle2, 
-  HelpCircle, RefreshCw, Send, Sparkles, MessageCircle, Heart
-} from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Zap, RefreshCw } from 'lucide-react';
 
-import { getRankedViralPosts, scoreDraftPost } from '../services/api';
-import MetricCard from '../components/ui/MetricCard';
+import { getRankedViralPosts, getFacebookRecommendations, scoreDraftPost } from '../services/api';
 import SectionHeader from '../components/ui/SectionHeader';
-import SentimentBadge from '../components/ui/SentimentBadge';
 import EmptyState from '../components/ui/EmptyState';
+import { usePlatform } from '../context/PlatformContext';
 
 const ViralPotential = () => {
-  const [platform, setPlatform] = useState('all');
+  const { platform } = usePlatform();
   const [loading, setLoading] = useState(true);
   const [rankedPosts, setRankedPosts] = useState([]);
+  const [recommendationData, setRecommendationData] = useState(null);
+  const [loadError, setLoadError] = useState('');
   
   // Simulator State
   const [draftText, setDraftText] = useState(
@@ -22,19 +19,25 @@ const ViralPotential = () => {
   );
   const [draftLikes, setDraftLikes] = useState(120);
   const [draftComments, setDraftComments] = useState(35);
-  const [draftPlatform, setDraftPlatform] = useState('instagram');
   const [draftSentiment, setDraftSentiment] = useState('positive');
   
   const [simResult, setSimResult] = useState(null);
   const [simLoading, setSimLoading] = useState(false);
+  const [simError, setSimError] = useState('');
 
   const fetchRanked = async () => {
     setLoading(true);
+    setLoadError('');
     try {
-      const res = await getRankedViralPosts(platform, 15);
-      setRankedPosts(res.data.ranked_posts || []);
+      const [postsRes, recommendationsRes] = await Promise.all([
+        getRankedViralPosts(15, platform),
+        getFacebookRecommendations(platform)
+      ]);
+      setRankedPosts(postsRes.data.ranked_posts || []);
+      setRecommendationData(recommendationsRes.data);
     } catch (err) {
       console.error(err);
+      setLoadError(`Could not load ${platform} analytics. Check the backend connection and retry.`);
     } finally {
       setLoading(false);
     }
@@ -47,19 +50,21 @@ const ViralPotential = () => {
   const handleSimulateDraft = async (e) => {
     e.preventDefault();
     setSimLoading(true);
+    setSimError('');
     try {
       const res = await scoreDraftPost({
         text: draftText,
         likes: parseInt(draftLikes, 10) || 0,
         comments: parseInt(draftComments, 10) || 0,
-        platform: draftPlatform,
         sentiment: draftSentiment,
         confidence: 0.90,
-        created_time: new Date().toISOString()
+        created_time: new Date().toISOString(),
+        platform
       });
       setSimResult(res.data);
     } catch (err) {
       console.error(err);
+      setSimError('Draft scoring failed. Check the backend connection and retry.');
     } finally {
       setSimLoading(false);
     }
@@ -71,20 +76,12 @@ const ViralPotential = () => {
         <div>
           <SectionHeader 
             title="Viral Post Potential Estimator" 
-            subtitle="Transparent multi-factor heuristic scoring (0-100) evaluating interaction volume, discussion friction velocity, prime audience windows, and emotional polarity."
+          subtitle={`Experimental 0–100 heuristic ranking from observed ${platform} reactions, comments, available shares, sentiment, and stored posting-hour history.`}
           />
         </div>
 
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <select 
-            value={platform} 
-            onChange={(e) => setPlatform(e.target.value)}
-            style={{ fontSize: '0.85rem' }}
-          >
-            <option value="all">All Sources</option>
-            <option value="facebook">Facebook Only</option>
-            <option value="instagram">Instagram Only</option>
-          </select>
+          <span className="badge badge-primary">{platform} analytics</span>
           <button className="btn-secondary" onClick={fetchRanked} disabled={loading}>
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
@@ -96,25 +93,42 @@ const ViralPotential = () => {
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
           <Zap size={20} color="var(--warning)" style={{ flexShrink: 0, marginTop: '2px' }} />
           <div style={{ fontSize: '0.875rem' }}>
-            <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>Scientific Heuristic Architecture: </span>
-            Evaluates 5 verifiable factors: 
-            <strong> (1) Interaction Volume</strong>, 
-            <strong> (2) Discussion Velocity Ratio</strong> (comments per like), 
-            <strong> (3) Emotional Polarity Intensity</strong> (high sentiment confidence), 
-            <strong> (4) Prime Timing Window</strong> (11-14 or 18-21 UTC), and 
-            <strong> (5) Discoverability Tags</strong>.
+              <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>Experimental heuristic, not a trained model: </span>
+            Score contributions come from observed engagement volume, comment-to-reaction ratio, sentiment confidence, historical posting-hour comparisons, and shares or tags.
             <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-              Disclaimer: Transparent heuristic estimate for content optimization — not an infallible future guarantee.
+              The database has no engagement snapshots or labeled viral outcomes. Scores are not probabilities and do not measure growth; missing metrics are excluded where possible.
             </div>
           </div>
         </div>
       </div>
 
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <h3 style={{ margin: '0 0 0.5rem 0' }}>Recommendations from {platform} analytics</h3>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0 0 1rem 0' }}>
+          Each suggestion includes its observed evidence. Only stored live {platform} posts contribute to these comparisons.
+        </p>
+        {!recommendationData?.recommendations?.length ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            Collect at least three live Facebook posts to generate recommendations. {recommendationData?.sample_size ?? 0} currently available.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: '0.75rem' }}>
+            {recommendationData.recommendations.map((item, index) => (
+              <div key={index} style={{ padding: '0.75rem 1rem', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
+                <strong>{item.title}</strong>
+                <div style={{ marginTop: '0.25rem', fontSize: '0.85rem' }}>{item.action}</div>
+                <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.78rem' }}>{item.evidence}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Ranked Feed Table */}
       <div className="card" style={{ marginBottom: '2rem' }}>
         <h3 style={{ margin: '0 0 1rem 0' }}>Ranked Feed by Viral Potential Score</h3>
-        
-        {rankedPosts.length === 0 ? (
+        {loadError && <div role="alert" style={{ color: 'var(--error)', marginBottom: '0.75rem' }}>{loadError}</div>}
+        {loading ? <div style={{ color: 'var(--text-muted)' }}>Loading Facebook post metrics…</div> : rankedPosts.length === 0 ? (
           <EmptyState icon={Zap} title="No Posts Evaluated" description="Feed empty or loading." />
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -126,6 +140,7 @@ const ViralPotential = () => {
                   <th style={{ padding: '0.75rem 1rem' }}>Tier</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Platform</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Post Text</th>
+                  <th style={{ padding: '0.75rem 1rem' }}>Engagement</th>
                   <th style={{ padding: '0.75rem 1rem' }}>Driving Factors</th>
                 </tr>
               </thead>
@@ -149,14 +164,20 @@ const ViralPotential = () => {
                       </span>
                     </td>
                     <td style={{ padding: '0.75rem 1rem', textTransform: 'capitalize' }}>
-                      {post.platform}
+                      Facebook
                     </td>
                     <td style={{ padding: '0.75rem 1rem', maxWidth: '320px', lineHeight: 1.4 }}>
                       {post.text}
                     </td>
+                    <td style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                      <div>Reactions: {post.engagement_metrics_available?.reactions ? post.likes : 'Unavailable'}</div>
+                      <div>Comments: {post.engagement_metrics_available?.comments ? post.comments : 'Unavailable'}</div>
+                      <div>Shares: {post.engagement_metrics_available?.shares ? post.shares : 'Unavailable'}</div>
+                      <div style={{ color: 'var(--text-muted)', marginTop: '0.2rem' }}>Growth: not measured</div>
+                    </td>
                     <td style={{ padding: '0.75rem 1rem' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.75rem' }}>
-                        {post.contributing_factors?.slice(0, 2).map((f, i) => (
+                        {post.contributing_factors?.map((f, i) => (
                           <span key={i} style={{ color: 'var(--text-muted)' }}>
                             • <strong style={{ color: 'var(--text-main)' }}>{f.factor}</strong> ({f.points})
                           </span>
@@ -209,17 +230,6 @@ const ViralPotential = () => {
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Target Platform:</label>
-              <select 
-                value={draftPlatform} 
-                onChange={(e) => setDraftPlatform(e.target.value)}
-                style={{ width: '100%' }}
-              >
-                <option value="instagram">Instagram</option>
-                <option value="facebook">Facebook</option>
-              </select>
-            </div>
-            <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Sentiment Tone:</label>
               <select 
                 value={draftSentiment} 
@@ -237,6 +247,8 @@ const ViralPotential = () => {
             <Zap size={15} /> {simLoading ? 'Simulating...' : 'Calculate Viral Potential'}
           </button>
         </form>
+
+        {simError && <div role="alert" style={{ color: 'var(--error)', marginTop: '0.75rem' }}>{simError}</div>}
 
         {simResult && (
           <div style={{ marginTop: '1.5rem', paddingTop: '1.25rem', borderTop: '1px solid var(--border-color)' }}>

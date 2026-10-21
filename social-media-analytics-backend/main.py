@@ -9,21 +9,22 @@ Sentiment (Positive/Negative/Neutral) -> Analytics & Visualization APIs
 Run with:
     uvicorn main:app --reload --host 0.0.0.0 --port 8000
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from api import (
     upload, dataset, sentiment, analytics, facebook,
-    instagram, unified, aspects, engagement, viral,
-    alerts, trends_api, settings_api
+    unified, aspects, engagement, viral,
+    alerts, trends_api, settings_api, auth, hdfs, instagram
 )
+from api.auth import get_current_user
 
 app = FastAPI(
     title=settings.APP_NAME,
     description=(
-        "Backend for Big Data-based multi-platform social media sentiment analysis and "
-        "user behavior mining (Facebook + Instagram Graph API, Aspect Analysis, "
+        "Backend for Big Data-based Facebook social media sentiment analysis and "
+        "user behavior mining (Facebook Graph API, Aspect Analysis, "
         "Viral Potential, Crisis Alerts, Engagement Trends). Runs fully offline "
         "with Scikit-Learn TF-IDF + Multinomial Naive Bayes."
     ),
@@ -40,23 +41,25 @@ app.add_middleware(
 )
 
 # Core Big Data Pipeline Routers
-app.include_router(upload.router)
-app.include_router(dataset.router)
-app.include_router(sentiment.router)
-app.include_router(analytics.router)
+app.include_router(auth.router)
+app.include_router(upload.router, dependencies=[Depends(get_current_user)])
+app.include_router(dataset.router, dependencies=[Depends(get_current_user)])
+app.include_router(sentiment.router, dependencies=[Depends(get_current_user)])
+app.include_router(analytics.router, dependencies=[Depends(get_current_user)])
 
 # Social Intelligence Sources (Meta Graph API)
-app.include_router(facebook.router)
-app.include_router(instagram.router)
+app.include_router(facebook.router, dependencies=[Depends(get_current_user)])
+app.include_router(instagram.router, dependencies=[Depends(get_current_user)])
 
-# Unified Cross-Platform Analytics & Intelligence
-app.include_router(unified.router)
-app.include_router(aspects.router)
-app.include_router(engagement.router)
-app.include_router(viral.router)
-app.include_router(alerts.router)
-app.include_router(trends_api.router)
-app.include_router(settings_api.router)
+# Facebook Analytics & Intelligence
+app.include_router(unified.router, dependencies=[Depends(get_current_user)])
+app.include_router(aspects.router, dependencies=[Depends(get_current_user)])
+app.include_router(engagement.router, dependencies=[Depends(get_current_user)])
+app.include_router(viral.router, dependencies=[Depends(get_current_user)])
+app.include_router(alerts.router, dependencies=[Depends(get_current_user)])
+app.include_router(trends_api.router, dependencies=[Depends(get_current_user)])
+app.include_router(settings_api.router, dependencies=[Depends(get_current_user)])
+app.include_router(hdfs.router, dependencies=[Depends(get_current_user)])
 
 @app.get("/")
 def root():

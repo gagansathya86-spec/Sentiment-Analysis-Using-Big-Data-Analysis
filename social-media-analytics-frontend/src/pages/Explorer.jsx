@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Database, AlertCircle, FileText, CheckCircle } from 'lucide-react';
 import { DatasetContext } from '../context/DatasetContext';
 import { getDatasetPreview, getMissingValues, getDuplicates, getDatasetInfo } from '../services/api';
+import { formatApiError } from '../utils/apiError';
 
 const Explorer = () => {
   const { datasetId, filename } = useContext(DatasetContext);
@@ -37,7 +38,7 @@ const Explorer = () => {
         setDuplicateData(dupRes.data);
         setInfo(infoRes.data);
       } catch (err) {
-        setError(err.response?.data?.detail || 'Failed to fetch dataset information.');
+        setError(formatApiError(err, 'Failed to fetch dataset information.'));
       } finally {
         setLoading(false);
       }

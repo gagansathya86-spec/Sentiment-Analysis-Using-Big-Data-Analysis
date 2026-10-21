@@ -9,6 +9,7 @@ import {
 } from 'recharts';
 
 import { getRegisteredModels, compareDemoModels, compareModels } from '../services/api';
+import { formatApiError } from '../utils/apiError';
 import { DatasetContext } from '../context/DatasetContext';
 import MetricCard from '../components/ui/MetricCard';
 import ChartCard from '../components/ui/ChartCard';
@@ -69,7 +70,7 @@ export const ModelEval = () => {
       }
       setBenchmarkResult(res.data);
     } catch (err) {
-      setError(err.response?.data?.detail || err.message || 'Benchmark comparison failed');
+      setError(formatApiError(err, 'Benchmark comparison failed'));
     } finally {
       setBenchmarking(false);
     }

@@ -1,11 +1,14 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { Bell, Search, User } from 'lucide-react';
+import { Bell, Search, User, LogOut } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { usePlatform } from '../context/PlatformContext';
 
 const PAGE_TITLES = {
   '/': { title: 'Welcome', subtitle: 'Start your social media analysis' },
   '/dashboard': { title: 'Social Media Intelligence', subtitle: 'Understand audience sentiment, behavior and engagement across your social platforms.' },
   '/facebook': { title: 'Facebook Analytics', subtitle: 'Analyze posts, audience reactions, comments and engagement.' },
+  '/instagram': { title: 'Instagram Analytics', subtitle: 'Connect a linked Professional account and analyze accessible media and comments.' },
   '/behavior': { title: 'User Behavior', subtitle: 'Analyze posting frequency and audience activity patterns.' },
   '/sentiment-dashboard': { title: 'Sentiment Analytics', subtitle: 'Detailed breakdown of audience sentiment and trends.' },
   '/trends': { title: 'Trends Analysis', subtitle: 'Monitor social media activity and sentiment over time.' },
@@ -20,6 +23,8 @@ const PAGE_TITLES = {
 
 const Header = () => {
   const location = useLocation();
+  const { user, logout } = useAuth();
+  const { platform, setPlatform, instagramStatus } = usePlatform();
   const current = PAGE_TITLES[location.pathname] || { title: 'Dashboard', subtitle: 'Social Media Intelligence Platform' };
 
   return (
@@ -44,6 +49,14 @@ const Header = () => {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', color: 'var(--text-muted)', fontSize: '0.68rem' }}>
+          Analytics platform
+          <select aria-label="Analytics platform" value={platform} onChange={(event) => setPlatform(event.target.value)} style={{ minWidth: '145px', padding: '0.45rem 0.65rem', borderRadius: 'var(--radius-sm)', background: 'var(--sidebar-bg)', color: 'var(--text-main)', borderColor: 'var(--border-color)' }}>
+            <option value="facebook">Facebook</option>
+            <option value="instagram">Instagram</option>
+          </select>
+          {platform === 'instagram' && instagramStatus && <span role="status" style={{ color: instagramStatus.connected ? 'var(--success)' : 'var(--warning)' }}>{instagramStatus.connected ? `@${instagramStatus.account.username}` : instagramStatus.status === 'error' ? 'Instagram connection could not be verified' : 'Instagram not connected'}</span>}
+        </label>
         <div style={{ position: 'relative' }}>
           <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)' }} />
           <input 
@@ -63,7 +76,7 @@ const Header = () => {
           <Bell size={20} />
         </button>
         
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', paddingLeft: '1.5rem', borderLeft: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', paddingLeft: '1.25rem', borderLeft: '1px solid var(--border-color)' }}>
           <div style={{ 
             width: '36px', 
             height: '36px', 
@@ -76,10 +89,11 @@ const Header = () => {
           }}>
             <User size={18} />
           </div>
-          <div style={{ textAlign: 'left', display: 'none' }}>
-            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>Admin User</div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-main)' }}>{user?.username || 'User'}</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Project Workspace</div>
           </div>
+          <button onClick={() => logout().catch(() => {})} title="Sign out" aria-label="Sign out" style={{ color: 'var(--text-muted)', display: 'flex', padding: 6 }}><LogOut size={17} /></button>
         </div>
       </div>
     </header>

@@ -1,20 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import CountUp from 'react-countup';
-
-const parseValue = (val) => {
-  if (typeof val === 'number') return { num: val, suffix: '' };
-  if (typeof val === 'string') {
-    if (val === 'N/A' || isNaN(parseFloat(val))) return null;
-    const num = parseFloat(val.replace(/,/g, ''));
-    const suffix = val.includes('%') ? '%' : '';
-    return { num, suffix };
-  }
-  return null;
-};
+import { parseMetricValue } from '../../utils/metricValue';
 
 const MetricCard = ({ title, value, subtitle, icon: Icon, trend, trendLabel, color = 'var(--primary)', index = 0 }) => {
-  const parsed = parseValue(value);
+  const parsed = parseMetricValue(value);
   const CountUpComponent = CountUp.default || CountUp;
 
   return (

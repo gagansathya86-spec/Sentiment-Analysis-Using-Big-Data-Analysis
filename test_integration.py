@@ -1,14 +1,26 @@
 import requests
 import time
+import os
 
 BASE_URL = "http://localhost:8000/api"
+USERNAME = os.environ.get("TEST_USERNAME", "")
+PASSWORD = os.environ.get("TEST_PASSWORD", "")
+
+if not USERNAME or not PASSWORD:
+    raise SystemExit("Set TEST_USERNAME and TEST_PASSWORD for the application account before running this integration workflow.")
+
+client = requests.Session()
+login = requests.post(f"{BASE_URL}/auth/login", json={"username": USERNAME, "password": PASSWORD}, timeout=15)
+if login.status_code != 200:
+    raise SystemExit(f"Application login failed ({login.status_code}): {login.text}")
+client.headers.update({"Authorization": f"Bearer {login.json()['access_token']}"})
 
 def test_workflow(sample_size):
     print(f"\n--- Testing Workflow with {sample_size} records ---")
     
     # 1. Upload/Prepare Sentiment140
     print("Preparing Sentiment140 sample...")
-    res = requests.post(f"{BASE_URL}/upload-sentiment140", json={"sample_size": sample_size})
+    res = client.post(f"{BASE_URL}/upload-sentiment140", json={"sample_size": sample_size})
     if res.status_code != 200:
         print("Upload failed:", res.text)
         return
@@ -19,7 +31,7 @@ def test_workflow(sample_size):
     
     # 2. Preprocess
     print("Running preprocessing...")
-    res = requests.post(f"{BASE_URL}/datasets/{dataset_id}/preprocess", json={
+    res = client.post(f"{BASE_URL}/datasets/{dataset_id}/preprocess", json={
         "mapping": mapping,
         "remove_urls": True,
         "remove_mentions": True,
@@ -39,7 +51,7 @@ def test_workflow(sample_size):
     
     # 3. Train Model
     print("Training TF-IDF + Multinomial NB...")
-    res = requests.post(f"{BASE_URL}/sentiment/train/{dataset_id}", json={
+    res = client.post(f"{BASE_URL}/sentiment/train/{dataset_id}", json={
         "mapping": mapping,
         "test_split_size": 0.2,
         "tfidf_max_features": 5000,
@@ -57,7 +69,7 @@ def test_workflow(sample_size):
     
     # 4. Predict Dataset
     print("Predicting dataset...")
-    res = requests.post(f"{BASE_URL}/sentiment/predict-dataset/{dataset_id}")
+    res = client.post(f"{BASE_URL}/sentiment/predict-dataset/{dataset_id}")
     if res.status_code != 200:
         print("Predict failed:", res.text)
         return
@@ -65,18 +77,18 @@ def test_workflow(sample_size):
     
     # 5. Behavior Analytics
     print("Generating behavior analytics...")
-    res = requests.get(f"{BASE_URL}/analytics/{dataset_id}/behavior-summary")
+    res = client.get(f"{BASE_URL}/analytics/{dataset_id}/behavior-summary")
     if res.status_code == 200:
         print("Behavior parsed ok. Engagement available?", res.json()["engagement"]["available"])
         
     # 6. Trends
     print("Generating trends...")
-    res = requests.get(f"{BASE_URL}/analytics/{dataset_id}/sentiment-trends")
+    res = client.get(f"{BASE_URL}/analytics/{dataset_id}/sentiment-trends")
     if res.status_code == 200:
         print("Trends generated. Number of trend days:", len(res.json()))
 
     print("Dashboard...")
-    res = requests.get(f"{BASE_URL}/analytics/{dataset_id}/dashboard")
+    res = client.get(f"{BASE_URL}/analytics/{dataset_id}/dashboard")
     if res.status_code == 200:
         print("Dashboard generated successfully.")
         

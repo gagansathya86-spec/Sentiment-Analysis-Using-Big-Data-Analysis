@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Upload as UploadIcon, File, CheckCircle, AlertTriangle, Database } from 'lucide-react';
 import { uploadDataset, uploadSentiment140 } from '../services/api';
+import { formatApiError } from '../utils/apiError';
 import { DatasetContext } from '../context/DatasetContext';
 import SectionHeader from '../components/ui/SectionHeader';
 
@@ -40,7 +41,7 @@ const Upload = () => {
       setSuccess(true);
       setTimeout(() => navigate('/explorer'), 1500);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to upload dataset.');
+      setError(formatApiError(err, 'Failed to upload dataset.'));
     } finally {
       setLoading(false);
     }
@@ -58,7 +59,7 @@ const Upload = () => {
       setSuccess(true);
       setTimeout(() => navigate('/explorer'), 1500);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to prepare Sentiment140 dataset.');
+      setError(formatApiError(err, 'Failed to prepare Sentiment140 dataset.'));
     } finally {
       setLoading(false);
     }

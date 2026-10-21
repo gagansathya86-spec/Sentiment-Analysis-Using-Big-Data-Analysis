@@ -1,7 +1,7 @@
 """
 Unified Multi-Platform Analytics API Router
 Provides cross-platform data access, unified metrics, combined charts,
-filtering (All, Facebook, Instagram), synchronization, and CSV export.
+Facebook filtering, synchronization, and CSV export.
 """
 from fastapi import APIRouter, Query, HTTPException, Response
 from typing import Optional, List, Dict, Any
@@ -10,41 +10,50 @@ import io
 
 from services import social_service
 from config import settings
+from api.facebook import ACTIVE_PAGE_STATE
+from api.instagram import ACTIVE_INSTAGRAM_STATE
 
 router = APIRouter(prefix="/api/unified", tags=["Unified Analytics"])
 
 
 @router.get("/status")
-def get_unified_status():
+def get_unified_status(demo_mode: bool = Query(False)):
     """Returns platform connection status, record counts, and last synchronization timestamps."""
     sync_statuses = social_service.get_sync_statuses()
-    metrics = social_service.get_unified_metrics()
+    metrics = social_service.get_unified_metrics(include_sample=demo_mode)
     
     return {
         "facebook": {
             "configured": bool(settings.FACEBOOK_ACCESS_TOKEN or settings.META_ACCESS_TOKEN),
+            "status": "active" if (settings.FACEBOOK_ACCESS_TOKEN or settings.META_ACCESS_TOKEN) else "unconfigured",
             "posts_count": metrics["platforms"]["facebook"]["posts"],
             "comments_count": metrics["platforms"]["facebook"]["comments"],
             "last_sync": sync_statuses.get("facebook", {}).get("last_sync"),
-            "sync_status": sync_statuses.get("facebook", {}).get("status", "idle")
-        },
-        "instagram": {
-            "configured": bool(settings.INSTAGRAM_ACCESS_TOKEN or settings.META_ACCESS_TOKEN or settings.FACEBOOK_ACCESS_TOKEN),
-            "posts_count": metrics["platforms"]["instagram"]["posts"],
-            "comments_count": metrics["platforms"]["instagram"]["comments"],
-            "last_sync": sync_statuses.get("instagram", {}).get("last_sync"),
-            "sync_status": sync_statuses.get("instagram", {}).get("status", "idle")
+            "sync_status": sync_statuses.get("facebook", {}).get("status", "idle"),
+            "active": True
         },
         "total_records": metrics["total_records"],
+        "has_live_data": social_service.has_live_data(),
+        "has_sample_data": social_service.has_sample_data(),
+        "demo_mode": demo_mode,
         "database": "SQLite (social_feed.db)",
         "processing_engine": settings.PROCESSING_ENGINE
     }
 
 
 @router.get("/metrics")
-def get_metrics(platform: Optional[str] = Query("all")):
-    """Returns KPI summary cards for the given platform filter (all, facebook, instagram)."""
-    return social_service.get_unified_metrics(platform=platform)
+def get_metrics(platform: Optional[str] = Query("all"), demo_mode: bool = Query(False)):
+    """Returns KPI summary cards for Facebook posts and comments."""
+    account_id = (ACTIVE_INSTAGRAM_STATE.get("account_id") or settings.INSTAGRAM_ACCOUNT_ID or None) if platform == "instagram" else ACTIVE_PAGE_STATE.get("selected_page_id") if platform == "facebook" else None
+    return social_service.get_unified_metrics(platform=platform, account_id=account_id, include_sample=demo_mode)
+
+
+@router.get("/dashboard-analytics")
+def get_dashboard_analytics(platform: str = Query("facebook")):
+    """Return sentiment and behavior summaries from the selected platform's stored analyses."""
+    selected = platform.lower()
+    account_id = (ACTIVE_INSTAGRAM_STATE.get("account_id") or settings.INSTAGRAM_ACCOUNT_ID or None) if selected == "instagram" else ACTIVE_PAGE_STATE.get("selected_page_id")
+    return social_service.get_social_dashboard_analytics(platform=selected, account_id=account_id)
 
 
 @router.get("/feed")
@@ -52,14 +61,18 @@ def get_social_feed(
     platform: Optional[str] = Query("all"),
     sentiment: Optional[str] = Query("all"),
     search: Optional[str] = Query(None),
+    demo_mode: bool = Query(False),
     limit: int = Query(50),
     offset: int = Query(0)
 ):
-    """Returns normalized social posts with sentiment and engagement scores."""
+    """Returns normalized social posts with sentiment and engagement scores.
+    By default (demo_mode=False), returns only real live posts from Facebook API."""
     posts = social_service.get_social_posts(
         platform=platform,
         sentiment=sentiment,
         search=search,
+        include_sample=demo_mode,
+        account_id=((ACTIVE_INSTAGRAM_STATE.get("account_id") or settings.INSTAGRAM_ACCOUNT_ID or None) if platform == "instagram" else (ACTIVE_PAGE_STATE.get("selected_page_id") if platform == "facebook" else None)),
         limit=limit,
         offset=offset
     )
@@ -69,17 +82,20 @@ def get_social_feed(
         "limit": limit,
         "offset": offset,
         "platform_filter": platform,
-        "sentiment_filter": sentiment
+        "sentiment_filter": sentiment,
+        "demo_mode": demo_mode,
+        "is_sample_feed": any(p.get("is_sample") == 1 for p in posts)
     }
 
 
 @router.get("/charts")
-def get_charts_data(platform: Optional[str] = Query("all")):
+def get_charts_data(platform: Optional[str] = Query("all"), demo_mode: bool = Query(False)):
     """Returns aggregated data formatted for Recharts:
     1. Sentiment breakdown by platform
     2. Sentiment timeline
     3. Cross-platform engagement comparison"""
-    posts = social_service.get_social_posts(platform=platform, limit=500)
+    account_id = (ACTIVE_INSTAGRAM_STATE.get("account_id") or settings.INSTAGRAM_ACCOUNT_ID or None) if platform == "instagram" else ACTIVE_PAGE_STATE.get("selected_page_id") if platform == "facebook" else None
+    posts = social_service.get_social_posts(platform=platform, account_id=account_id, include_sample=demo_mode, limit=500)
     
     # 1. Distribution for Pie / Bar
     sent_counts = {"positive": 0, "negative": 0, "neutral": 0}
@@ -125,51 +141,66 @@ def get_charts_data(platform: Optional[str] = Query("all")):
     timeline = sorted(list(timeline_dict.values()), key=lambda x: x["date"])
     
     # 3. Platform Comparison
-    fb_posts = [p for p in posts if p["platform"] == "facebook"]
-    ig_posts = [p for p in posts if p["platform"] == "instagram"]
-    
+    platform_names = sorted({(p.get("platform") or "facebook").lower() for p in posts})
     platform_comparison = [
         {
-            "platform": "Facebook",
-            "posts": len(fb_posts),
-            "avg_likes": round(sum(p["likes_count"] for p in fb_posts) / max(len(fb_posts), 1), 1),
-            "avg_comments": round(sum(p["comments_count"] for p in fb_posts) / max(len(fb_posts), 1), 1),
-            "positive_pct": round((len([p for p in fb_posts if p["sentiment"] == "positive"]) / max(len(fb_posts), 1)) * 100, 1),
-            "negative_pct": round((len([p for p in fb_posts if p["sentiment"] == "negative"]) / max(len(fb_posts), 1)) * 100, 1)
-        },
-        {
-            "platform": "Instagram",
-            "posts": len(ig_posts),
-            "avg_likes": round(sum(p["likes_count"] for p in ig_posts) / max(len(ig_posts), 1), 1),
-            "avg_comments": round(sum(p["comments_count"] for p in ig_posts) / max(len(ig_posts), 1), 1),
-            "positive_pct": round((len([p for p in ig_posts if p["sentiment"] == "positive"]) / max(len(ig_posts), 1)) * 100, 1),
-            "negative_pct": round((len([p for p in ig_posts if p["sentiment"] == "negative"]) / max(len(ig_posts), 1)) * 100, 1)
+            "platform": selected_platform.title(),
+            "posts": len(selected_posts := [p for p in posts if (p.get("platform") or "facebook").lower() == selected_platform]),
+            "avg_likes": round(sum(p["likes_count"] for p in selected_posts if p.get("likes_count") is not None) / max(sum(p.get("likes_count") is not None for p in selected_posts), 1), 1) if any(p.get("likes_count") is not None for p in selected_posts) else None,
+            "avg_comments": round(sum(p["comments_count"] for p in selected_posts if p.get("comments_count") is not None) / max(sum(p.get("comments_count") is not None for p in selected_posts), 1), 1) if any(p.get("comments_count") is not None for p in selected_posts) else None,
+            "positive_pct": round((len([p for p in selected_posts if p["sentiment"] == "positive"]) / max(len(selected_posts), 1)) * 100, 1),
+            "negative_pct": round((len([p for p in selected_posts if p["sentiment"] == "negative"]) / max(len(selected_posts), 1)) * 100, 1)
         }
+        for selected_platform in platform_names
     ]
     
     return {
         "sentiment_distribution": distribution,
         "timeline": timeline,
-        "platform_comparison": platform_comparison
+        "platform_comparison": platform_comparison,
+        "total_posts": len(posts)
     }
 
 
 @router.post("/seed-sample")
 def seed_sample_data():
-    """Resets or repopulates the database with realistic sample demonstration posts and comments."""
-    social_service.seed_sample_multiplatform_data()
+    """Explicitly triggers loading of sample demonstration posts and comments."""
+    social_service.seed_sample_facebook_data()
     return {
         "status": "success",
-        "message": "Sample demonstration data loaded successfully for Facebook and Instagram.",
-        "metrics": social_service.get_unified_metrics()
+        "message": "Sample demonstration data loaded successfully for testing.",
+        "metrics": social_service.get_unified_metrics(include_sample=True)
     }
+
+
+@router.post("/clear-sample")
+def clear_sample_data():
+    """Explicitly clears sample demonstration data without touching real live records."""
+    social_service.clear_sample_data()
+    return {
+        "status": "success",
+        "message": "Sample demonstration data cleared. Feed now shows only live data.",
+        "metrics": social_service.get_unified_metrics(include_sample=False)
+    }
+
+
+@router.get("/demo-status")
+def get_demo_status():
+    """Returns whether live data or demo data is present."""
+    return {
+        "has_live_data": social_service.has_live_data(),
+        "has_sample_data": social_service.has_sample_data()
+    }
+
 
 
 @router.get("/export")
 def export_unified_csv(platform: Optional[str] = Query("all")):
     """Generates and downloads a clean CSV containing all normalized social records."""
-    posts = social_service.get_social_posts(platform=platform, limit=1000)
-    comments = social_service.get_social_comments(limit=1000)
+    account_id = (ACTIVE_INSTAGRAM_STATE.get("account_id") or settings.INSTAGRAM_ACCOUNT_ID or None) if platform == "instagram" else ACTIVE_PAGE_STATE.get("selected_page_id") if platform == "facebook" else None
+    posts = social_service.get_social_posts(platform=platform, account_id=account_id, limit=1000)
+    post_ids = {str(post.get("id")) for post in posts}
+    comments = [comment for comment in social_service.get_social_comments(limit=1000, platform=platform) if str(comment.get("post_id")) in post_ids]
     
     rows = []
     for p in posts:
@@ -180,9 +211,9 @@ def export_unified_csv(platform: Optional[str] = Query("all")):
             "author": p["author"],
             "text": p["text"],
             "created_time": p["created_time"],
-            "likes": p["likes_count"],
-            "comments": p["comments_count"],
-            "shares": p.get("shares_count", 0),
+            "likes": p.get("likes_count"),
+            "comments": p.get("comments_count"),
+            "shares": p.get("shares_count"),
             "sentiment": p["sentiment"],
             "confidence": p.get("sentiment_confidence", 0.0),
             "permalink": p.get("permalink", "")

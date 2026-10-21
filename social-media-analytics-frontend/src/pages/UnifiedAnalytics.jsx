@@ -3,7 +3,7 @@ import {
   Layers, Download, RefreshCw, Search, MessageSquare, 
   Filter, BarChart2, TrendingUp, Users, Heart, Share2, MessageCircle, AlertTriangle
 } from 'lucide-react';
-import { IgIcon, FbIcon } from '../components/BrandIcons';
+import { FbIcon } from '../components/BrandIcons';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, 
   Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area 
@@ -11,13 +11,14 @@ import {
 
 import { 
   getUnifiedMetrics, getUnifiedCharts, getUnifiedFeed, 
-  seedSampleData, getExportCsvUrl 
+  seedSampleData, clearSampleData, downloadExportCsv 
 } from '../services/api';
 import MetricCard from '../components/ui/MetricCard';
 import ChartCard from '../components/ui/ChartCard';
 import SentimentBadge from '../components/ui/SentimentBadge';
 import SectionHeader from '../components/ui/SectionHeader';
 import EmptyState from '../components/ui/EmptyState';
+import { usePlatform } from '../context/PlatformContext';
 
 const CHART_STYLES = {
   grid: { stroke: 'var(--chart-grid)', strokeDasharray: '3 3', vertical: false },
@@ -27,8 +28,15 @@ const CHART_STYLES = {
   }
 };
 
+const formatMetric = (value) => (
+  typeof value === 'number' && Number.isFinite(value) ? value.toLocaleString() : '—'
+);
+const formatPercent = (value) => (
+  typeof value === 'number' && Number.isFinite(value) ? `${value}%` : '—'
+);
+
 const UnifiedAnalytics = () => {
-  const [platform, setPlatform] = useState('all');
+  const { platform, setPlatform } = usePlatform();
   const [sentimentFilter, setSentimentFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -37,18 +45,22 @@ const UnifiedAnalytics = () => {
   const [charts, setCharts] = useState(null);
   const [feed, setFeed] = useState([]);
   const [seeding, setSeeding] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = async (isDemo = demoMode) => {
     setLoading(true);
     try {
       const [metricsRes, chartsRes, feedRes] = await Promise.all([
-        getUnifiedMetrics(platform),
-        getUnifiedCharts(platform),
-        getUnifiedFeed({ platform, sentiment: sentimentFilter, search: searchQuery, limit: 50 })
+        getUnifiedMetrics(platform, isDemo),
+        getUnifiedCharts(platform, isDemo),
+        getUnifiedFeed({ platform, sentiment: sentimentFilter, search: searchQuery, limit: 50, demo_mode: isDemo })
       ]);
       setMetrics(metricsRes.data);
       setCharts(chartsRes.data);
       setFeed(feedRes.data.data || []);
+      if (feedRes.data.is_sample_feed) {
+        setDemoMode(true);
+      }
     } catch (err) {
       console.error('Error fetching unified analytics:', err);
     } finally {
@@ -57,19 +69,33 @@ const UnifiedAnalytics = () => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, [platform, sentimentFilter]);
+    fetchData(demoMode);
+  }, [platform, sentimentFilter, demoMode]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchData();
+    fetchData(demoMode);
   };
 
   const handleSeedDemoData = async () => {
     setSeeding(true);
     try {
       await seedSampleData();
-      await fetchData();
+      setDemoMode(true);
+      await fetchData(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setSeeding(false);
+    }
+  };
+
+  const handleClearDemoData = async () => {
+    setSeeding(true);
+    try {
+      await clearSampleData();
+      setDemoMode(false);
+      await fetchData(false);
     } catch (err) {
       console.error(err);
     } finally {
@@ -83,8 +109,8 @@ const UnifiedAnalytics = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <SectionHeader 
-            title="Unified Social Media Intelligence" 
-            subtitle="Cross-platform analytics synthesizing Facebook & Instagram sentiment, engagement velocity, and customer perception into a normalized schema."
+            title={`${platform === 'instagram' ? 'Instagram' : 'Facebook'} Social Intelligence`} 
+            subtitle={`${platform === 'instagram' ? 'Instagram' : 'Facebook'} analytics synthesizing sentiment, engagement, and customer perception into a normalized view.`}
           />
         </div>
         
@@ -98,7 +124,6 @@ const UnifiedAnalytics = () => {
             padding: '2px'
           }}>
             {[
-              { id: 'all', label: 'All Platforms' },
               { id: 'facebook', label: 'Facebook' },
               { id: 'instagram', label: 'Instagram' }
             ].map(tab => (
@@ -120,54 +145,78 @@ const UnifiedAnalytics = () => {
             ))}
           </div>
 
-          <a 
-            href={getExportCsvUrl(platform)} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="btn-secondary"
-            style={{ textDecoration: 'none' }}
-          >
+          <button onClick={() => downloadExportCsv(platform).catch((error) => console.error('CSV export failed', error))} className="btn-secondary">
             <Download size={15} /> Export CSV
-          </a>
-
-          <button className="btn-secondary" onClick={handleSeedDemoData} disabled={seeding}>
-            <RefreshCw size={15} className={seeding ? 'animate-spin' : ''} /> 
-            {seeding ? 'Loading...' : 'Load Sample Demo'}
           </button>
+
+          {demoMode ? (
+            <button className="btn-secondary" onClick={handleClearDemoData} disabled={seeding} style={{ borderColor: 'var(--warning)', color: 'var(--warning)' }}>
+              Clear Demo Data
+            </button>
+          ) : (
+            <button className="btn-secondary" onClick={handleSeedDemoData} disabled={seeding}>
+              <RefreshCw size={15} className={seeding ? 'animate-spin' : ''} /> 
+              {seeding ? 'Loading...' : 'Load Sample Demo'}
+            </button>
+          )}
         </div>
       </div>
+
+
+      {/* Demo Mode Notice Banner */}
+      {demoMode && (
+        <div style={{ 
+          padding: '0.75rem 1.25rem', 
+          backgroundColor: 'rgba(234, 179, 8, 0.1)', 
+          border: '1px solid rgba(234, 179, 8, 0.3)', 
+          borderRadius: 'var(--radius)', 
+          marginBottom: '1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.75rem'
+        }}>
+          <span style={{ fontSize: '0.85rem', color: 'var(--warning)' }}>
+            <strong>Demo Mode:</strong> Displaying synthetic records for demonstration.
+          </span>
+          <button onClick={handleClearDemoData} className="btn-secondary" style={{ padding: '0.3rem 0.65rem', fontSize: '0.75rem', borderColor: 'var(--warning)', color: 'var(--warning)' }}>
+            Switch to Live Data
+          </button>
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
         <MetricCard 
           title="Total Ingested Records" 
-          value={metrics ? metrics.total_records.toLocaleString() : '0'} 
+          value={formatMetric(metrics?.total_records)} 
           icon={Layers} 
-          subtitle={`${metrics?.total_posts || 0} Posts, ${metrics?.total_comments || 0} Comments`} 
+          subtitle={`${formatMetric(metrics?.total_posts)} Posts, ${formatMetric(metrics?.total_comments)} Comments`} 
         />
         <MetricCard 
           title="Positive Sentiment" 
-          value={metrics ? `${metrics.percentages.positive}%` : '0%'} 
+          value={formatPercent(metrics?.percentages?.positive)} 
           icon={TrendingUp} 
-          subtitle={`${metrics?.sentiment_counts.positive || 0} positive items`} 
+          subtitle={`${formatMetric(metrics?.sentiment_counts?.positive)} positive items`} 
         />
         <MetricCard 
           title="Negative Sentiment" 
-          value={metrics ? `${metrics.percentages.negative}%` : '0%'} 
+          value={formatPercent(metrics?.percentages?.negative)} 
           icon={AlertTriangle} 
-          subtitle={`${metrics?.sentiment_counts.negative || 0} negative items`} 
+          subtitle={`${formatMetric(metrics?.sentiment_counts?.negative)} negative items`} 
         />
         <MetricCard 
           title="Total Engagement Score" 
-          value={metrics ? metrics.engagement.total_engagement_score.toLocaleString() : '0'} 
+          value={formatMetric(metrics?.engagement?.total_engagement_score)} 
           icon={Heart} 
-          subtitle={`Avg ${metrics?.engagement.average_engagement_per_post || 0} per post`} 
+          subtitle={`Avg ${formatMetric(metrics?.engagement?.average_engagement_per_post)} per post`} 
         />
       </div>
 
       {/* Charts Grid */}
       <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
-        <ChartCard title="Overall Sentiment Distribution" subtitle="Normalized multi-platform sentiment share">
+          <ChartCard title="Facebook Sentiment Distribution" subtitle="Sentiment across stored Facebook posts">
           {charts?.sentiment_distribution && charts.sentiment_distribution.some(d => d.value > 0) ? (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
@@ -228,9 +277,9 @@ const UnifiedAnalytics = () => {
       </div>
 
       {/* Platform Comparison Matrix */}
-      {platform === 'all' && charts?.platform_comparison && (
+      {charts?.platform_comparison && (
         <div className="card" style={{ marginBottom: '1.5rem' }}>
-          <h3 style={{ margin: '0 0 1rem 0' }}>Platform Benchmark Comparison</h3>
+          <h3 style={{ margin: '0 0 1rem 0' }}>Facebook Post Metrics</h3>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
               <thead>
@@ -247,7 +296,7 @@ const UnifiedAnalytics = () => {
                 {charts.platform_comparison.map((row) => (
                   <tr key={row.platform} style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <td style={{ padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontWeight: 600 }}>
-                      {row.platform === 'Facebook' ? <FbIcon size={18} color="#1877f2" /> : <IgIcon size={18} color="#e1306c" />}
+                      <FbIcon size={18} color="#1877f2" />
                       {row.platform}
                     </td>
                     <td style={{ padding: '0.75rem 1rem' }}>{row.posts}</td>
@@ -267,7 +316,7 @@ const UnifiedAnalytics = () => {
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <h3 style={{ margin: 0 }}>Unified Cross-Platform Feed</h3>
+            <h3 style={{ margin: 0 }}>Facebook Feed</h3>
             <p style={{ margin: '0.25rem 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
               Normalized social records with sentiment predictions and interaction metrics.
             </p>
@@ -306,7 +355,7 @@ const UnifiedAnalytics = () => {
           <EmptyState 
             icon={Layers}
             title="No Feed Records Found"
-            description="Try adjusting your filters or click 'Load Sample Demo' to populate multi-platform data."
+            description="Try adjusting your filters or load the Facebook sample demo."
           />
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -324,8 +373,8 @@ const UnifiedAnalytics = () => {
                 {feed.map((post) => (
                   <tr key={post.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                     <td style={{ padding: '0.75rem 1rem' }}>
-                      <span className={`badge ${post.platform === 'facebook' ? 'badge-primary' : 'badge-neutral'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', textTransform: 'capitalize' }}>
-                        {post.platform === 'facebook' ? <FbIcon size={12} /> : <IgIcon size={12} />}
+                      <span className="badge badge-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', textTransform: 'capitalize' }}>
+                        <FbIcon size={12} />
                         {post.platform}
                       </span>
                     </td>

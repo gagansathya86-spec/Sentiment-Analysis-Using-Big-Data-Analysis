@@ -3,9 +3,9 @@ import {
   Settings, Key, Server, Database, CheckCircle, 
   AlertCircle, RefreshCw, ShieldCheck, Cpu, HardDrive 
 } from 'lucide-react';
-import { FbIcon, IgIcon } from '../components/BrandIcons';
 
 import { getSystemStatus, testMetaConnection, updateCredentials } from '../services/api';
+import { formatApiError } from '../utils/apiError';
 import MetricCard from '../components/ui/MetricCard';
 import SectionHeader from '../components/ui/SectionHeader';
 
@@ -21,10 +21,10 @@ const SettingsPage = () => {
   // Form State
   const [metaToken, setMetaToken] = useState('');
   const [pageId, setPageId] = useState('me');
-  const [igAccountId, setIgAccountId] = useState('auto');
   const [processingEngine, setProcessingEngine] = useState('pandas');
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(null);
+  const [saveError, setSaveError] = useState(null);
 
   const fetchStatus = async () => {
     setLoading(true);
@@ -56,7 +56,7 @@ const SettingsPage = () => {
       const res = await testMetaConnection();
       setTokenTestResult(res.data);
     } catch (err) {
-      setTokenTestError(err.response?.data?.detail || err.message || 'Token verification failed');
+      setTokenTestError(formatApiError(err, 'Token verification failed'));
     } finally {
       setTestingToken(false);
     }
@@ -66,21 +66,21 @@ const SettingsPage = () => {
     e.preventDefault();
     setSaving(true);
     setSaveSuccess(null);
+    setSaveError(null);
     try {
       const payload = {
         facebook_page_id: pageId,
-        instagram_account_id: igAccountId,
         processing_engine: processingEngine
       };
       if (metaToken.trim()) {
         payload.meta_access_token = metaToken.trim();
       }
       const res = await updateCredentials(payload);
-      setSaveSuccess(res.data.message || 'Configuration updated successfully.');
+      setSaveSuccess(formatApiError(res.data?.message, 'Configuration updated successfully.'));
       setMetaToken('');
       fetchStatus();
     } catch (err) {
-      console.error(err);
+      setSaveError(formatApiError(err, 'Could not save Facebook credentials.'));
     } finally {
       setSaving(false);
     }
@@ -90,7 +90,7 @@ const SettingsPage = () => {
     <div style={{ maxWidth: '1100px', margin: '0 auto', paddingBottom: '3rem' }}>
       <SectionHeader 
         title="Settings & System Diagnostics" 
-        subtitle="Manage Meta Graph API connectivity (Facebook & Instagram), runtime credentials, and processing engine modes (Pandas vs Spark)."
+        subtitle="Manage Facebook Graph API connectivity, runtime credentials, and processing engine modes (Pandas vs Spark)."
       />
 
       {saveSuccess && (
@@ -98,6 +98,7 @@ const SettingsPage = () => {
           <CheckCircle size={16} /> {saveSuccess}
         </div>
       )}
+      {saveError && <div role="alert" style={{ marginBottom: '1rem', padding: '0.75rem 1rem', border: '1px solid var(--error)', borderRadius: 'var(--radius-sm)', color: 'var(--error)' }}>{saveError}</div>}
 
       {/* Diagnostics Cards */}
       <div className="grid-3" style={{ marginBottom: '1.5rem' }}>
@@ -125,24 +126,27 @@ const SettingsPage = () => {
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h3 style={{ margin: '0 0 0.5rem 0' }}>Meta Graph API Configuration</h3>
         <p style={{ margin: '0 0 1.25rem 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          Credentials are kept secure in the backend and never exposed in client bundles.
+          Tokens are sent directly to the backend, encrypted in SQLite, and never returned to the browser. Replacing the user token clears cached Page tokens so they can be acquired again from Facebook.
         </p>
 
         <form onSubmit={handleSaveCredentials}>
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-              Update Meta Access Token (User or Page Token):
+              Facebook User Access Token (renewed authorization):
             </label>
             <input 
               type="password" 
-              placeholder="Paste updated EAAP... token (leaves current token unchanged if left blank)" 
+              placeholder="Paste a fresh User Access Token from your existing Meta app" 
               value={metaToken}
               onChange={(e) => setMetaToken(e.target.value)}
               style={{ width: '100%', fontSize: '0.875rem' }}
             />
           </div>
+          <p style={{ margin: '-0.5rem 0 1.25rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+            Grant <code>pages_show_list</code>, <code>pages_read_engagement</code>, and <code>pages_read_user_content</code>. Page tokens are re-fetched after saving.
+          </p>
 
-          <div className="grid-3" style={{ marginBottom: '1.25rem' }}>
+          <div className="grid-2" style={{ marginBottom: '1.25rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Facebook Page ID:</label>
               <input 
@@ -150,17 +154,6 @@ const SettingsPage = () => {
                 value={pageId}
                 onChange={(e) => setPageId(e.target.value)}
                 style={{ width: '100%' }}
-              />
-            </div>
-
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>Instagram Account ID:</label>
-              <input 
-                type="text" 
-                value={igAccountId}
-                onChange={(e) => setIgAccountId(e.target.value)}
-                style={{ width: '100%' }}
-                placeholder="'auto' or numeric ID"
               />
             </div>
 
@@ -199,7 +192,7 @@ const SettingsPage = () => {
         {tokenTestResult && (
           <div style={{ marginTop: '1.25rem', padding: '1rem', backgroundColor: 'rgba(16, 185, 129, 0.05)', border: '1px solid var(--success)', borderRadius: 'var(--radius-sm)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--success)', fontWeight: 600, marginBottom: '0.5rem' }}>
-              <CheckCircle size={18} /> {tokenTestResult.message}
+              <CheckCircle size={18} /> {formatApiError(tokenTestResult.message, 'Meta connection verified.')}
             </div>
 
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
@@ -217,6 +210,10 @@ const SettingsPage = () => {
                 </div>
               ))}
             </div>
+            {tokenTestResult.connected_pages?.length > 0 && <div style={{ marginTop: '0.85rem', fontSize: '0.8rem' }}>
+              <strong>Managed Facebook Pages:</strong>{' '}
+              {tokenTestResult.connected_pages.map(page => `${page.page_name} (${page.page_id})${page.page_token_available ? ' · Page token available' : ' · no Page token'}`).join('; ')}
+            </div>}
           </div>
         )}
       </div>

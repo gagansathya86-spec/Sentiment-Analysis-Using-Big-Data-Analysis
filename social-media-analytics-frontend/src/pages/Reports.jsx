@@ -5,15 +5,16 @@ import {
 } from 'lucide-react';
 
 import { 
-  getUnifiedMetrics, getUnifiedFeed, getExportCsvUrl, 
+  getUnifiedMetrics, getUnifiedFeed, downloadExportCsv, 
   getAspectSummary, getAlerts 
 } from '../services/api';
 import MetricCard from '../components/ui/MetricCard';
 import SectionHeader from '../components/ui/SectionHeader';
 import SentimentBadge from '../components/ui/SentimentBadge';
+import { usePlatform } from '../context/PlatformContext';
 
 export const Reports = () => {
-  const [platform, setPlatform] = useState('all');
+  const { platform, setPlatform } = usePlatform();
   const [loading, setLoading] = useState(true);
   
   const [metrics, setMetrics] = useState(null);
@@ -54,7 +55,7 @@ export const Reports = () => {
         <div>
           <SectionHeader 
             title="Analytical Reports & Executive Dossier" 
-            subtitle="Comprehensive synthesis of multi-platform audience sentiment, brand perception, critical incidents, and engagement dynamics."
+            subtitle={`Comprehensive synthesis of ${platform} audience sentiment, brand perception, critical incidents, and engagement dynamics.`}
           />
         </div>
 
@@ -64,20 +65,13 @@ export const Reports = () => {
             onChange={(e) => setPlatform(e.target.value)}
             style={{ fontSize: '0.85rem' }}
           >
-            <option value="all">All Channels</option>
             <option value="facebook">Facebook Only</option>
             <option value="instagram">Instagram Only</option>
           </select>
 
-          <a 
-            href={getExportCsvUrl(platform)} 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="btn-secondary"
-            style={{ textDecoration: 'none' }}
-          >
+          <button onClick={() => downloadExportCsv(platform).catch((error) => console.error('CSV export failed', error))} className="btn-secondary">
             <Download size={15} /> Download CSV
-          </a>
+          </button>
 
           <button className="btn-primary" onClick={handlePrint}>
             <Printer size={15} /> Print / Save PDF Dossier
@@ -117,7 +111,7 @@ export const Reports = () => {
             <strong> {metrics?.percentages.positive || 0}% Positive</strong>, 
             <strong> {metrics?.percentages.negative || 0}% Negative</strong>, and 
             <strong> {metrics?.percentages.neutral || 0}% Neutral</strong>. 
-            The dataset captures active engagement across Facebook and Instagram platforms, evaluated through a 
+            The dataset captures active Facebook engagement, evaluated through a 
             fully offline Scikit-Learn TF-IDF + Multinomial Naive Bayes model.
           </p>
         </div>

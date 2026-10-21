@@ -6,8 +6,9 @@ for distributed, in-memory processing (Section II-C). A real Hadoop/Spark
 cluster is rarely available in a local dev environment, so this module
 defines a small ProcessingEngine interface with two implementations:
 
-  - PandasProcessingEngine: local development mode. Same method signatures,
-    backed by pandas instead of Spark/HDFS. This is the default.
+  - PandasProcessingEngine: local development mode backed by pandas and
+    local dataset files. It is not an HDFS fallback. Facebook records use a
+    separate WebHDFS sink in services.hdfs_storage.
   - SparkProcessingEngine: production mode. Reads/writes through HDFS and
     processes with PySpark. Only imported/instantiated when
     PROCESSING_ENGINE=spark, so the app has zero hard dependency on a
@@ -58,12 +59,10 @@ class ProcessingEngine(ABC):
 
 
 class PandasProcessingEngine(ProcessingEngine):
-    """Local development processing engine backed by pandas.
+    """Local development dataset processing engine backed by pandas.
 
-    Mirrors the same operations Spark would perform (distributed read,
-    dedup, filter, map over partitions) but runs single-node, in-memory.
-    Storage here plays the role HDFS plays in the paper's architecture —
-    files are persisted under the configured data directories.
+    Mirrors Spark transformations, but runs single-node and in-memory with
+    local data directories. It does not write to HDFS.
     """
 
     @property
